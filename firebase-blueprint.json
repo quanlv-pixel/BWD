@@ -2,28 +2,40 @@
   "entities": {
     "User": {
       "title": "User Profile",
-      "description": "Public user profile information.",
+      "description": "User profile with points and medals info.",
       "type": "object",
       "properties": {
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
-        "bio": { "type": "string" },
-        "uid": { "type": "string" }
+        "email": { "type": "string" },
+        "uid": { "type": "string" },
+        "medalsCount": { "type": "number" },
+        "points": { "type": "number" }
       },
-      "required": ["displayName", "uid"]
+      "required": ["uid"]
     },
-    "Post": {
-      "title": "Community Post",
-      "description": "A post shared in the self-study community.",
+    "CourseProgress": {
+      "title": "Course Progress",
+      "description": "Tracks a user's progress in a specific course.",
       "type": "object",
       "properties": {
-        "authorId": { "type": "string" },
-        "authorName": { "type": "string" },
-        "content": { "type": "string" },
-        "likes": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["authorId", "authorName", "content", "createdAt"]
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "completedLessonIds": { "type": "array" },
+        "isCompleted": { "type": "boolean" },
+        "lastAccessed": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Medal": {
+      "title": "Medal Achievement",
+      "description": "Medals earned by users for completing courses.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "medalName": { "type": "string" },
+        "earnedAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -31,9 +43,13 @@
       "schema": "User",
       "description": "User profile collection."
     },
-    "posts/{postId}": {
-      "schema": "Post",
-      "description": "Community posts collection."
+    "userProgress/{progressId}": {
+      "schema": "CourseProgress",
+      "description": "User course progress tracking."
+    },
+    "medals/{medalId}": {
+      "schema": "Medal",
+      "description": "Collection of medals awarded to users."
     }
   }
 }

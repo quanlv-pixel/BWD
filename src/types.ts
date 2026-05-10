@@ -3,6 +3,16 @@ export interface UserProfile {
   displayName: string;
   photoURL?: string;
   bio?: string;
+  points?: number;
+  medalsCount?: number;
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  duration: string;
+  exercise: string;
+  videoId?: string;
 }
 
 export interface Post {
@@ -20,5 +30,9 @@ export interface Course {
   description: string;
   thumbnail: string;
   author: string;
+  rating: number;
+  students: number;
+  difficulty: string;
+  lessons: Lesson[];
   date?: string;
 }
