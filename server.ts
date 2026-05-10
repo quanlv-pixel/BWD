@@ -65,7 +65,23 @@ async function startServer() {
       res.json(courses);
     } catch (error: any) {
       console.error("YouTube Error:", error.response?.data || error.message);
-      res.status(500).json({ error: "Failed to fetch courses from YouTube." });
+      // Fallback data if API key is invalid or quota exceeded
+      res.json([
+        { 
+          id: 'j942wKiXFu8', 
+          title: 'Khóa học ReactJS cho người mới bắt đầu', 
+          description: 'Học ReactJS một cách bài bản qua các dự án thực tế.', 
+          thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee', 
+          author: 'Self-Study Hub' 
+        },
+        { 
+          id: 'v_zS_pRE8fQ', 
+          title: 'JavaScript cơ bản đến nâng cao (2024)', 
+          description: 'Nắm vững các khái niệm then chốt của JavaScript hiện đại.', 
+          thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a', 
+          author: 'Community Hub' 
+        }
+      ]);
     }
   });
 
