@@ -70,7 +70,7 @@ export function AIAssistant() {
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-24 right-6 w-[90vw] max-w-[400px] h-[60vh] max-h-[600px] bg-white dark:bg-slate-900 rounded-2xl shadow-3d z-50 flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800"
+            className="fixed bottom-24 right-6 w-[90vw] max-w-[400px] h-[60vh] max-h-[600px] bg-white rounded-2xl shadow-3d z-50 flex flex-col overflow-hidden border border-slate-200"
           >
             <div className="p-4 bg-emerald-600 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -85,10 +85,10 @@ export function AIAssistant() {
 
             <div 
               ref={scrollRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900"
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50"
             >
               {messages.length === 0 && (
-                <div className="text-center py-10 text-slate-400 dark:text-slate-500">
+                <div className="text-center py-10 text-slate-400">
                   <Bot size={48} className="mx-auto mb-2 opacity-20" />
                   <p>Chào bạn! Mình có thể giúp gì cho quá trình tự học của bạn hôm nay?</p>
                 </div>
@@ -105,7 +105,7 @@ export function AIAssistant() {
                     "p-3 rounded-2xl text-sm shadow-sm",
                     msg.role === "user" 
                       ? "bg-emerald-600 text-white rounded-br-none" 
-                      : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-bl-none"
+                      : "bg-white text-slate-800 border border-slate-100 rounded-bl-none"
                   )}>
                     <div className="prose prose-sm prose-emerald max-w-none dark:prose-invert">
                       <ReactMarkdown>
@@ -116,21 +116,21 @@ export function AIAssistant() {
                 </div>
               ))}
               {isLoading && (
-                <div className="mr-auto items-start max-w-[85%] flex gap-2 p-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl rounded-bl-none shadow-sm animate-pulse">
+                <div className="mr-auto items-start max-w-[85%] flex gap-2 p-3 bg-white border border-slate-100 rounded-2xl rounded-bl-none shadow-sm animate-pulse">
                   <Loader2 size={16} className="animate-spin text-emerald-600" />
                   <span className="text-sm text-slate-400">AI đang suy nghĩ...</span>
                 </div>
               )}
             </div>
 
-            <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+            <div className="p-3 bg-white border-t border-slate-100 flex gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Nhập câu hỏi của bạn..."
-                className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 dark:text-slate-200 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all"
+                className="flex-1 px-4 py-2 bg-slate-100 border-none rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm transition-all"
               />
               <button
                 onClick={handleSend}
