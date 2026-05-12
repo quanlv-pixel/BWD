@@ -1,42 +1,78 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 1. Default Deny
+    // 0. Default Deny - The Master Gate
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- Helpers ---
+    // --- Helpers (Pillar 3 & 4) ---
     function isSignedIn() { return request.auth != null; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
+    
+    // Pillar 7: Simplified verification check
+    function isVerified() { return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com'); }
 
-    // --- Users ---
+    // --- Users (Pillar 6) ---
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      
       allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming()) 
-                     && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio']);
+      allow update: if isOwner(userId) && isValidUser(incoming())
+                     && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'lastLogin']);
 
       function isValidUser(data) {
-        return data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 50
+        return data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100
             && data.uid == request.auth.uid;
       }
     }
 
-    // --- Posts ---
+    // --- User Progress (Pillar 1) ---
+    match /userProgress/{progressId} {
+      allow get: if isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidProgress(incoming());
+      allow update: if isOwner(existing().userId) && isValidProgress(incoming())
+                     && incoming().diff(existing()).affectedKeys().hasOnly(['completedLessonIds', 'isCompleted', 'lastAccessed']);
+
+      function isValidProgress(data) {
+        return data.userId == request.auth.uid 
+            && data.courseId is string && data.courseId.size() <= 100
+            && data.completedLessonIds is list
+            && data.completedLessonIds.size() <= 100;
+      }
+    }
+
+    // --- Medals (Pillar 1 & 8) ---
+    match /medals/{medalId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidMedal(incoming());
+      allow update: if false;
+      allow delete: if false;
+
+      function isValidMedal(data) {
+        return data.userId == request.auth.uid
+            && data.courseId is string && data.courseId.size() <= 100
+            && data.medalName is string && data.medalName.size() <= 200
+            && data.earnedAt == request.time;
+      }
+    }
+
+    // --- Posts (Community Feed) ---
     match /posts/{postId} {
-      // Cho phép mọi người xem bài viết công khai để tăng tính tương tác
       allow read: if true; 
       
-      allow create: if isSignedIn() && isValidPost(incoming()) && incoming().authorId == request.auth.uid;
+      allow create: if isSignedIn() && isVerified() && isValidPost(incoming()) && incoming().authorId == request.auth.uid;
       
       allow update: if isSignedIn() && (
-        // Chỉ chủ bài viết mới được sửa nội dung
         (isOwner(existing().authorId) && incoming().diff(existing()).affectedKeys().hasOnly(['content']) && isValidPost(incoming())) ||
-        // Cho phép tăng lượt tương tác (likes) một cách có kiểm soát
         (incoming().diff(existing()).affectedKeys().hasOnly(['likes']) && incoming().likes == existing().likes + 1)
       );
       
@@ -44,8 +80,8 @@ service cloud.firestore {
 
       function isValidPost(data) {
         return data.content is string && data.content.size() > 0 && data.content.size() <= 2000
-            && data.authorId is string && data.authorName is string
-            && data.createdAt == request.time;
+            && data.authorId == request.auth.uid
+            && data.createdAt == (resource == null ? request.time : existing().createdAt);
       }
     }
   }
