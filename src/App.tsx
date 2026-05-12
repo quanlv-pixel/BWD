@@ -194,8 +194,16 @@ const Navbar = ({ user, searchQuery, setSearchQuery, medalsCount, darkMode, setD
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Đồng bộ hóa localSearch khi searchQuery thay đổi
+  useEffect(() => {
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -203,10 +211,60 @@ const Navbar = ({ user, searchQuery, setSearchQuery, medalsCount, darkMode, setD
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (localSearch.trim().length < 2) {
+        setSuggestions([]);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/search-suggestions?q=${encodeURIComponent(localSearch)}`);
+        const data = await res.json();
+        setSuggestions(data);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error("Fetch suggestions error", err);
+      }
+    };
+
+    const timer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
+  const handleSearchChange = (val: string) => {
+    setLocalSearch(val);
+    if (location.pathname === '/skills') {
+      setSearchQuery(val);
+    }
+  };
+
+  const handleSelectSuggestion = (id: string, title: string) => {
+    setSearchQuery(title);
+    setLocalSearch(title);
+    setShowSuggestions(false);
+    if (id.startsWith('py_') || id.startsWith('js_') || id.startsWith('dl_') || id.startsWith('ai_') || id.startsWith('ielts_') || id.startsWith('toeic_') || id.startsWith('mkt_') || id.startsWith('finance_') || id.startsWith('soft_') || id.startsWith('time_')) {
+      navigate(`/course/${id}`);
+    } else {
+      navigate('/skills');
+    }
+  };
+
   const handleSearchKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       setSearchQuery(localSearch);
-      navigate('/skills');
+      if (location.pathname !== '/skills') {
+        navigate('/skills');
+      }
     }
   };
 
@@ -250,16 +308,69 @@ const Navbar = ({ user, searchQuery, setSearchQuery, medalsCount, darkMode, setD
         </nav>
 
         <div className="flex items-center gap-3 sm:gap-6">
-          <div className="hidden xl:flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-1.5 border border-slate-200 dark:border-slate-700 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-            <Search size={16} className="text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Tìm khóa học..." 
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              onKeyDown={handleSearchKeyPress}
-              className="bg-transparent border-none focus:ring-0 text-sm ml-2 w-32 focus:w-48 transition-all outline-none dark:text-white"
-            />
+          <div ref={searchContainerRef} className="hidden xl:flex items-center relative group">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-1.5 border border-slate-200 dark:border-slate-700 focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+              <Search size={16} className="text-slate-400 group-focus-within:text-emerald-500" />
+              <input 
+                type="text" 
+                placeholder="Tìm khóa học..." 
+                value={localSearch}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={handleSearchKeyPress}
+                onFocus={() => localSearch.length >= 2 && setShowSuggestions(true)}
+                className="bg-transparent border-none focus:ring-0 text-sm ml-2 w-32 focus:w-52 transition-all outline-none dark:text-white"
+              />
+              {localSearch && (
+                <button 
+                  onClick={() => {
+                    setLocalSearch("");
+                    setSearchQuery("");
+                    setSuggestions([]);
+                  }}
+                  className="text-slate-300 hover:text-slate-600 dark:hover:text-slate-100 transition-colors"
+                  aria-label="Xóa tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <AnimatePresence>
+              {showSuggestions && suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 py-2 z-50 overflow-hidden"
+                >
+                  <div className="px-4 py-2 border-b border-slate-50 dark:border-slate-800 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Kết quả gợi ý</p>
+                  </div>
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleSelectSuggestion(s.id, s.title)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-emerald-600 shrink-0">
+                        <BookOpen size={14} />
+                      </div>
+                      <span className="font-bold truncate">{s.title}</span>
+                    </button>
+                  ))}
+                  <button 
+                    onClick={() => {
+                      setSearchQuery(localSearch);
+                      setShowSuggestions(false);
+                      if (location.pathname !== '/skills') navigate('/skills');
+                    }}
+                    className="w-full px-4 py-2 mt-1 text-xs font-black text-emerald-600 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-center border-t border-slate-50 dark:border-slate-800"
+                  >
+                    Xem tất cả kết quả
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
@@ -957,11 +1068,19 @@ const ResourcesPage = () => {
   );
 };
 
-const SkillsPage = ({ searchQuery }: { searchQuery: string }) => {
+const SkillsPage = ({ searchQuery, setSearchQuery }: { searchQuery: string, setSearchQuery: (q: string) => void }) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTrack, setActiveTrack] = useState("Tất cả");
   const navigate = useNavigate();
+
+  const handleTrackChange = (trackName: string) => {
+    setActiveTrack(trackName);
+    // Clear global search query when changing tracks to avoid confusion
+    if (searchQuery) {
+      setSearchQuery("");
+    }
+  };
 
   const tracks = [
     { name: "Tất cả", icon: <Layout size={18} /> },
@@ -973,7 +1092,8 @@ const SkillsPage = ({ searchQuery }: { searchQuery: string }) => {
 
   useEffect(() => {
     setIsLoading(true);
-    // Use lower case category if it's not "Tất cả"
+    // If the track is "Tất cả" and there's no search query, fetch everything
+    // Otherwise, we prioritize search query, then category query
     const categoryQuery = activeTrack === "Tất cả" ? "" : activeTrack.toLowerCase();
     const finalQuery = searchQuery || categoryQuery;
     
@@ -1000,7 +1120,7 @@ const SkillsPage = ({ searchQuery }: { searchQuery: string }) => {
             {tracks.map((track) => (
               <button
                 key={track.name}
-                onClick={() => setActiveTrack(track.name)}
+                onClick={() => handleTrackChange(track.name)}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-left",
                   activeTrack === track.name 
@@ -1386,7 +1506,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage user={user} />} />
             <Route path="/register" element={<RegisterPage user={user} />} />
-            <Route path="/skills" element={<SkillsPage searchQuery={searchQuery} />} />
+            <Route path="/skills" element={<SkillsPage searchQuery={searchQuery} setSearchQuery={setSearchQuery} />} />
             <Route path="/course/:id" element={<CourseDetailPage user={user} />} />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/rewards" element={<RewardsPage user={user} />} />

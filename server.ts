@@ -28,7 +28,7 @@ async function startServer() {
         id: 'py_01', 
         title: 'Lập trình Python từ cơ bản đến nâng cao', 
         description: 'Khóa học toàn diện về Python, từ cú pháp căn bản đến xử lý dữ liệu và AI.', 
-        thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5', 
+        thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80', 
         author: 'Python Expert',
         rating: 4.9,
         students: 2500,
@@ -39,6 +39,20 @@ async function startServer() {
           { id: 'py_l2', title: 'Biến và các Phép tính', duration: '18:00', exercise: 'Viết chương trình tính diện tích hình tròn', videoId: '8mXAIAtUfQU' },
           { id: 'py_l3', title: 'Cấu trúc Điều khiển If-Else', duration: '25:00', exercise: 'Kiểm tra một số là chẵn hay lẻ', videoId: 'Z9v5SAsW2iM' },
           { id: 'py_l4', title: 'Vòng lặp For và While', duration: '30:00', exercise: 'In ra bảng cửu chương từ 1 đến 10', videoId: '9L77QExavI0' }
+        ]
+      },
+      { 
+        id: 'js_01', 
+        title: 'JavaScript Modern ES6+: Từ Zero đến Hero', 
+        description: 'Làm chủ JavaScript hiện đại để xây dựng các ứng dụng Web tương tác mạnh mẽ.', 
+        thumbnail: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?auto=format&fit=crop&w=800&q=80', 
+        author: 'Web Dev Mastery',
+        rating: 4.8,
+        students: 3800,
+        difficulty: 'Trung bình',
+        category: 'Lập trình & CNTT',
+        lessons: [
+          { id: 'js_l1', title: 'Let, Const và Arrow Functions', duration: '15:00', exercise: 'Chuyển đổi các hàm cũ sang Arrow function.', videoId: 'nc66_t2f6pE' }
         ]
       },
       { 
@@ -57,10 +71,24 @@ async function startServer() {
         ]
       },
       { 
+        id: 'toeic_01', 
+        title: 'Bí kíp chinh phục TOEIC 900+', 
+        description: 'Tổng hợp các mẹo làm bài Part 5, 6, 7 và bộ từ vựng thường gặp trong đề thi.', 
+        thumbnail: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=800&q=80', 
+        author: 'Toeic Ninja',
+        rating: 4.7,
+        students: 4200,
+        difficulty: 'Cơ bản',
+        category: 'Ngoại Ngữ',
+        lessons: [
+          { id: 'toe_l1', title: 'Ngữ pháp TOEIC trọng tâm', duration: '25:00', exercise: 'Làm 50 câu hỏi trắc nghiệm ngữ pháp Part 5.', videoId: 'GndUwaS6Bik' }
+        ]
+      },
+      { 
         id: 'mkt_01', 
         title: 'Digital Marketing Fundamentals 2026', 
         description: 'Tổng quan về SEO, Facebook Ads và xu hướng Content Marketing mới nhất.', 
-        thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f', 
+        thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80', 
         author: 'Marketing Pro',
         rating: 4.7,
         students: 3200,
@@ -68,6 +96,20 @@ async function startServer() {
         category: 'Kinh tế - Marketing',
         lessons: [
           { id: 'mkt_l1', title: 'SEO On-page cơ bản', duration: '18:00', exercise: 'Viết tiêu đề và mô tả chuẩn SEO cho 1 bài viết.', videoId: 'DvwS7cV9GmQ' }
+        ]
+      },
+      { 
+        id: 'finance_01', 
+        title: 'Quản lý tài chính cá nhân cho người trẻ', 
+        description: 'Cách lập ngân sách, đầu tư quỹ chỉ số và xây dựng nền tảng tài chính bền vững.', 
+        thumbnail: 'https://images.unsplash.com/photo-1565514020179-026b92b84bb6?auto=format&fit=crop&w=800&q=80', 
+        author: 'Financial Freedom',
+        rating: 4.9,
+        students: 6100,
+        difficulty: 'Dễ',
+        category: 'Kinh tế - Marketing',
+        lessons: [
+          { id: 'fin_l1', title: 'Quy tắc 50/30/20', duration: '15:00', exercise: 'Lập bảng chi tiêu hàng tháng theo quy tắc này.', videoId: 'v_L-vV96Mps' }
         ]
       },
       { 
@@ -83,6 +125,48 @@ async function startServer() {
         lessons: [
           { id: 'soft_l1', title: 'Kỹ thuật Storytelling', duration: '22:00', exercise: 'Kể một câu chuyện ngắn trong vòng 2 phút.', videoId: 'HAnw168huqA' }
         ]
+      },
+      { 
+        id: 'time_01', 
+        title: 'Quản lý thời gian & Năng suất đột phá', 
+        description: 'Phương pháp Pomodoro, Deep Work và cách loại bỏ trì hoãn hiệu quả.', 
+        thumbnail: 'https://images.unsplash.com/photo-1495364141860-b0d03eccd065?auto=format&fit=crop&w=800&q=80', 
+        author: 'Productivity King',
+        rating: 4.8,
+        students: 2900,
+        difficulty: 'Cơ bản',
+        category: 'Kỹ năng mềm',
+        lessons: [
+          { id: 'time_l1', title: 'Deep Work Workflow', duration: '20:00', exercise: 'Thiết lập thời gian biểu Deep Work cho tuần tới.', videoId: 'mS_6F6T-n9Q' }
+        ]
+      },
+      { 
+        id: 'dl_01', 
+        title: 'Deep Learning căn bản với TensorFlow', 
+        description: 'Học về Mạng thần kinh nhân tạo (Neural Networks) và ứng dụng trong nhận diện hình ảnh.', 
+        thumbnail: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=800&q=80', 
+        author: 'AI Researcher',
+        rating: 4.9,
+        students: 1200,
+        difficulty: 'Nâng cao',
+        category: 'Lập trình & CNTT',
+        lessons: [
+          { id: 'dl_l1', title: 'Giới thiệu về Neural Networks', duration: '30:00', exercise: 'Xây dựng model perceptron đơn giản.', videoId: 'aircAruvnKk' }
+        ]
+      },
+      { 
+        id: 'ai_01', 
+        title: 'Trí tuệ nhân tạo (AI) cho mọi người', 
+        description: 'Hiểu về tương lai của công nghệ, Machine Learning và đạo đức trong AI.', 
+        thumbnail: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80', 
+        author: 'Tech Futurist',
+        rating: 4.8,
+        students: 5500,
+        difficulty: 'Cơ bản',
+        category: 'Lập trình & CNTT',
+        lessons: [
+          { id: 'ai_l1', title: 'Generative AI là gì?', duration: '20:00', exercise: 'Sử dụng ChatGPT hiệu quả với Prompt Engineering.', videoId: '5Z1WvLzN6-4' }
+        ]
       }
     ];
 
@@ -90,17 +174,17 @@ async function startServer() {
       return res.json(FEATURED_COURSES);
     }
 
-    // Attempt to search YouTube if query exists
-    if (!apiKey) {
-      // Fallback: Search mock data if no API key
-      const filtered = FEATURED_COURSES.filter(c => 
-        c.title.toLowerCase().includes(query) || 
-        c.description.toLowerCase().includes(query) ||
-        c.category?.toLowerCase().includes(query)
-      );
-      return res.json(filtered);
-    }
+    // Attempt to match local first - better for "deep learning" accuracy
+    const localMatches = FEATURED_COURSES.filter(c => 
+      c.title.toLowerCase().includes(query) || 
+      c.description.toLowerCase().includes(query) ||
+      (c.category && c.category.toLowerCase().includes(query))
+    );
 
+    // If query is specifically "deep learning" or similar, we want to ensure high quality results
+    if (!apiKey) {
+      return res.json(localMatches);
+    }
 
     try {
       const response = await axios.get("https://www.googleapis.com/youtube/v3/search", {
@@ -113,13 +197,13 @@ async function startServer() {
         }
       });
 
-      const courses = response.data.items.map((item: any) => ({
+      const youtubeCourses = response.data.items.map((item: any) => ({
         id: item.id.videoId,
         title: item.snippet.title,
         description: item.snippet.description,
         thumbnail: item.snippet.thumbnails.high.url,
         author: item.snippet.channelTitle,
-        rating: 4.5, // Default for external search
+        rating: 4.5,
         students: Math.floor(Math.random() * 5000),
         difficulty: 'Tự học',
         lessons: [
@@ -128,7 +212,15 @@ async function startServer() {
         ]
       }));
 
-      res.json(courses);
+      // Combine local matches with YouTube results, unique by title
+      const combined = [...localMatches];
+      youtubeCourses.forEach((yt: any) => {
+        if (!combined.some(c => c.title.toLowerCase() === yt.title.toLowerCase())) {
+          combined.push(yt);
+        }
+      });
+
+      res.json(combined);
     } catch (error: any) {
       const errorData = error.response?.data;
       const errorMessage = errorData?.error?.message || error.message;
@@ -136,19 +228,44 @@ async function startServer() {
       
       console.error(`YouTube API Error [${errorReason}]: ${errorMessage}`);
       
-      if (errorReason === "quotaExceeded") {
-        console.warn("YouTube API Quota exceeded. Using internal course database fallback.");
-      }
-
       // Enhanced fallback search in featured courses
       const filteredFallback = FEATURED_COURSES.filter(c => 
         c.title.toLowerCase().includes(query) || 
-        c.description.toLowerCase().includes(query)
+        c.description.toLowerCase().includes(query) ||
+        (c.category && c.category.toLowerCase().includes(query))
       );
       
-      // Return filtered fallback if matches found, otherwise return all featured courses
-      res.json(filteredFallback.length > 0 ? filteredFallback : FEATURED_COURSES);
+      // Return filtered fallback results
+      res.json(filteredFallback);
     }
+  });
+
+  // API for search suggestions (autocomplete)
+  app.get("/api/search-suggestions", async (req, res) => {
+    const query = (req.query.q as string || "").toLowerCase();
+    if (!query || query.length < 2) return res.json([]);
+
+    // Get suggestions from featured courses
+    // In a real app we might use Gemini or a cached index
+    const FEATURED_COURSES = [
+      { id: 'py_01', title: 'Lập trình Python từ cơ bản đến nâng cao' },
+      { id: 'js_01', title: 'JavaScript Modern ES6+: Từ Zero đến Hero' },
+      { id: 'ielts_01', title: 'Lộ trình học IELTS 7.0+ cho người mất gốc' },
+      { id: 'toeic_01', title: 'Bí kíp chinh phục TOEIC 900+' },
+      { id: 'mkt_01', title: 'Digital Marketing Fundamentals 2026' },
+      { id: 'finance_01', title: 'Quản lý tài chính cá nhân cho người trẻ' },
+      { id: 'soft_01', title: 'Kỹ năng Thuyết trình lôi cuốn' },
+      { id: 'time_01', title: 'Quản lý thời gian & Năng suất đột phá' },
+      { id: 'dl_01', title: 'Deep Learning căn bản với TensorFlow' },
+      { id: 'ai_01', title: 'Trí tuệ nhân tạo (AI) cho mọi người' }
+    ];
+
+    const suggestions = FEATURED_COURSES
+      .filter(c => c.title.toLowerCase().includes(query))
+      .slice(0, 5)
+      .map(c => ({ id: c.id, title: c.title, type: 'course' }));
+
+    res.json(suggestions);
   });
 
   // Vite middleware for development
