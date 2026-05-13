@@ -44,7 +44,15 @@ import {
   Settings,
   User as UserIcon,
   Sun,
-  Moon
+  Moon,
+  Camera,
+  Edit3,
+  Save,
+  Mail,
+  Shield,
+  ArrowLeft,
+  Phone,
+  MapPin
 } from "lucide-react";
 import { 
   signInWithPopup, 
@@ -53,7 +61,8 @@ import {
   User as FirebaseUser,
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  updateProfile
 } from "firebase/auth";
 import { 
   collection, 
@@ -64,8 +73,10 @@ import {
   serverTimestamp,
   doc,
   setDoc,
+  updateDoc,
   getDoc,
-  where
+  where,
+  limit
 } from "firebase/firestore";
 import { auth, db, googleProvider } from "./lib/firebase";
 import { cn } from "./lib/utils";
@@ -1447,6 +1458,377 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
   );
 };
 
+const ProfilePage = ({ user }: { user: FirebaseUser | null }) => {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [medals, setMedals] = useState<any[]>([]);
+  const [progress, setProgress] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Fetch Profile
+    const profileRef = doc(db, "users", user.uid);
+    getDoc(profileRef).then(snap => {
+      if (snap.exists()) setProfile(snap.data() as UserProfile);
+    });
+
+    // Fetch Medals
+    const medalsQ = query(collection(db, "medals"), where("userId", "==", user.uid));
+    onSnapshot(medalsQ, (snap) => {
+      setMedals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Fetch Progress
+    const progressQ = query(collection(db, "userProgress"), where("userId", "==", user.uid), orderBy("lastAccessed", "desc"), limit(5));
+    onSnapshot(progressQ, (snap) => {
+      setProgress(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setIsLoading(false);
+    });
+  }, [user]);
+
+  if (!user) {
+    return (
+      <div className="pt-40 text-center">
+        <h2 className="text-2xl font-black mb-4">Vui lòng đăng nhập để xem hồ sơ</h2>
+        <Link to="/login" className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold">Đăng nhập ngay</Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-24 pb-20 px-6 max-w-7xl mx-auto dark:bg-slate-950 transition-colors">
+      <div className="bg-white dark:bg-slate-900 rounded-[48px] border border-slate-100 dark:border-slate-800 shadow-3d overflow-hidden mb-12">
+        <div className="h-48 bg-gradient-to-r from-emerald-600 to-blue-600 relative">
+          <div className="absolute inset-0 bg-black/10 backdrop-blur-sm" />
+        </div>
+        <div className="px-12 pb-12 relative">
+          <div className="flex flex-col md:flex-row items-end gap-8 -mt-20 mb-8">
+            <div className="relative group">
+              <img 
+                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}&background=10b981&color=fff`} 
+                alt="Avatar" 
+                className="w-40 h-40 rounded-[40px] border-8 border-white dark:border-slate-900 shadow-2xl object-cover"
+              />
+              <Link to="/settings" className="absolute bottom-4 right-4 bg-emerald-600 text-white p-2 rounded-xl shadow-lg hover:bg-emerald-500 transition-colors">
+                <Camera size={18} />
+              </Link>
+            </div>
+            <div className="flex-1 pb-2">
+              <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2">{profile?.displayName || user.displayName}</h1>
+              <div className="flex flex-wrap items-center gap-4 text-slate-500 dark:text-slate-400 text-sm font-bold">
+                <span className="flex items-center gap-1.5"><Mail size={16} /> {user.email}</span>
+                <span className="flex items-center gap-1.5"><Clock size={16} /> Tham gia: {user.metadata.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString('vi-VN') : 'Mới đây'}</span>
+              </div>
+            </div>
+            <div className="pb-2">
+              <Link to="/settings" className="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700">
+                <Edit3 size={18} /> Chỉnh sửa hồ sơ
+              </Link>
+            </div>
+          </div>
+          <p className="text-lg text-slate-600 dark:text-slate-300 font-medium max-w-3xl leading-relaxed">
+            {profile?.bio || "Chưa có tiểu sử. Hãy cập nhật để mọi người hiểu rõ hơn về bạn!"}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-12 gap-8">
+        {/* Left Column: Stats & Achievements */}
+        <div className="lg:col-span-4 space-y-8">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6">Thống kê</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl border border-emerald-100 dark:border-emerald-900/30 text-center">
+                <Trophy className="text-emerald-600 mx-auto mb-2" size={24} />
+                <p className="text-2xl font-black text-emerald-900 dark:text-emerald-100 leading-none">{medals.length}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60 mt-1">Huy chương</p>
+              </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-900/30 text-center">
+                <BookOpen className="text-blue-600 mx-auto mb-2" size={24} />
+                <p className="text-2xl font-black text-blue-900 dark:text-blue-100 leading-none">{progress.length}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/60 mt-1">Khóa học</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6">Huy chương đạt được</h3>
+            {medals.length > 0 ? (
+              <div className="space-y-4">
+                {medals.map(m => (
+                  <div key={m.id} className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700">
+                    <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
+                      <Award size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900 dark:text-white line-clamp-1">{m.medalName}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Đạt được: {m.earnedAt?.toDate().toLocaleDateString('vi-VN')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 opacity-30">
+                <Trophy size={48} className="mx-auto mb-4" />
+                <p className="font-bold text-sm">Chưa có huy chương nào</p>
+              </div>
+            )}
+            {medals.length > 0 && (
+              <Link to="/rewards" className="w-full mt-6 flex items-center justify-center gap-2 py-3 bg-amber-500 text-white rounded-2xl font-bold shadow-lg hover:bg-amber-600 transition-all active:scale-95">
+                <Gift size={18} /> Đổi quà ngay
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Course Activity */}
+        <div className="lg:col-span-8 space-y-8">
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
+            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6">Hành trình học tập</h3>
+            {progress.length > 0 ? (
+              <div className="space-y-6">
+                {progress.map(p => (
+                  <div 
+                    key={p.id} 
+                    className="group flex flex-col md:flex-row md:items-center gap-6 p-6 bg-slate-50 dark:bg-slate-900/50 rounded-4xl border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-900/40 transition-all cursor-pointer"
+                    onClick={() => navigate(`/course/${p.courseId}`)}
+                  >
+                    <div className="w-full md:w-40 aspect-video rounded-2xl overflow-hidden bg-slate-200 shrink-0">
+                      <img 
+                        src={`https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&q=80`} 
+                        alt="Course" 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">Đang học</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                          <Clock size={12} /> {p.lastAccessed?.toDate().toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                      <h4 className="text-lg font-black text-slate-900 dark:text-white mb-4 group-hover:text-emerald-600 transition-colors">ID Khóa học: {p.courseId}</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold mb-1">
+                          <span className="text-slate-500">Tiến độ hoàn thành: {p.completedLessonIds?.length || 0} bài học</span>
+                          <span className="text-emerald-600">{p.isCompleted ? 'Hoàn thành' : 'Đang tiếp tục'}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: p.isCompleted ? '100%' : '60%' }}
+                            className="h-full bg-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-sm">
+                      <ChevronRight size={20} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20 opacity-20">
+                <Book className="mx-auto mb-4" size={64} />
+                <p className="text-lg font-bold">Bạn chưa bắt đầu khóa học nào</p>
+                <Link to="/skills" className="text-emerald-600 mt-2 inline-block hover:underline">Khám phá khóa học ngay</Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SettingsPage = ({ user }: { user: FirebaseUser | null }) => {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [bio, setBio] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [message, setMessage] = useState({ text: "", type: "" });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      setIsDataLoading(false);
+      return;
+    }
+
+    const profileRef = doc(db, "users", user.uid);
+    getDoc(profileRef).then(snap => {
+      if (snap.exists()) {
+        const data = snap.data() as UserProfile;
+        setProfile(data);
+        setDisplayName(data.displayName || "");
+        setBio(data.bio || "");
+      }
+      setIsDataLoading(false);
+    });
+  }, [user]);
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    
+    setIsLoading(true);
+    setMessage({ text: "", type: "" });
+
+    try {
+      // Update Firebase Auth Profile
+      await updateProfile(user, { displayName });
+
+      // Update Firestore Profile
+      const profileRef = doc(db, "users", user.uid);
+      await setDoc(profileRef, {
+        displayName,
+        bio,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      setMessage({ text: "Cập nhật thông tin thành công!", type: "success" });
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ text: "Có lỗi xảy ra: " + err.message, type: "error" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!user) return <div className="pt-40 text-center">Vui lòng đăng nhập</div>;
+  if (isDataLoading) return <div className="pt-40 text-center animate-pulse">Đang tải dữ liệu...</div>;
+
+  return (
+    <div className="pt-24 pb-20 px-6 max-w-3xl mx-auto dark:bg-slate-950 transition-colors">
+      <button 
+        onClick={() => navigate("/profile")}
+        className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 font-bold transition-colors mb-6 group"
+      >
+        <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-900/20 transition-all">
+          <ArrowLeft size={18} />
+        </div>
+        <span>Quay lại hồ sơ</span>
+      </button>
+
+      <div className="mb-12">
+        <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2">Cài đặt tài khoản</h1>
+        <p className="text-slate-500 dark:text-slate-400 font-medium">Quản lý thông tin cá nhân và thiết lập tài khoản của bạn.</p>
+      </div>
+
+      <div className="space-y-8">
+        <form onSubmit={handleUpdate} className="bg-white dark:bg-slate-900 p-10 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm space-y-8">
+          <div className="flex items-center gap-6 pb-8 border-b border-slate-50 dark:border-slate-800">
+            <div className="relative group">
+               <img 
+                src={user.photoURL || `https://ui-avatars.com/api/?name=${displayName}&background=10b981&color=fff`} 
+                alt="Avatar" 
+                className="w-24 h-24 rounded-3xl border-4 border-slate-50 dark:border-slate-800 object-cover"
+              />
+              <button type="button" className="absolute -bottom-2 -right-2 bg-white dark:bg-slate-800 p-2 rounded-xl shadow-md border border-slate-100 dark:border-slate-700 text-slate-500 hover:text-emerald-600 transition-colors">
+                <Camera size={16} />
+              </button>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">Ảnh đại diện</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium leading-relaxed max-w-[200px]">Tính năng cập nhật ảnh trực tiếp sẽ sớm ra mắt.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-black text-slate-700 dark:text-slate-300 ml-4 flex items-center gap-2">
+                <UserIcon size={16} className="text-slate-400" /> Tên hiển thị <span className="text-[10px] opacity-50 font-medium">(Tùy chọn)</span>
+              </label>
+              <input 
+                type="text" 
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Nhập tên của bạn"
+                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-3xl p-5 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none dark:text-white font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-black text-slate-700 dark:text-slate-300 ml-4 flex items-center gap-2">
+                <Edit3 size={16} className="text-slate-400" /> Giới thiệu ngắn <span className="text-[10px] opacity-50 font-medium">(Tùy chọn)</span>
+              </label>
+              <textarea 
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Một chút về bạn..."
+                rows={4}
+                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-3xl p-5 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none dark:text-white font-medium resize-none"
+              />
+            </div>
+            
+            <div className="space-y-2">
+                <label className="text-sm font-black text-slate-700 dark:text-slate-300 ml-4 flex items-center gap-2">
+                  <Mail size={16} className="text-slate-400" /> Email liên kết
+                </label>
+                <div className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-3xl p-5 text-slate-400 font-bold opacity-70">
+                  {user.email} (Không thể thay đổi)
+                </div>
+            </div>
+          </div>
+
+          {message.text && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className={cn(
+                "p-4 rounded-2xl text-sm font-black flex items-center gap-3",
+                message.type === "success" ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+              )}
+            >
+              {message.type === "success" ? <CheckCircle size={18} /> : <X size={18} />}
+              {message.text}
+            </motion.div>
+          )}
+
+          <div className="flex gap-4 pt-4">
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="flex-1 bg-emerald-600 text-white font-black py-4 rounded-3xl shadow-xl hover:bg-emerald-500 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : <><Save size={20} /> Lưu thay đổi</>}
+            </button>
+            <button 
+              type="button"
+              onClick={() => navigate("/profile")}
+              className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black py-4 rounded-3xl border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all text-center"
+            >
+              Hủy
+            </button>
+          </div>
+        </form>
+
+        <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800">
+           <h3 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+             <Shield size={20} className="text-blue-500" /> Bảo mật và Tài khoản
+           </h3>
+           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium leading-relaxed">
+             Bạn đang sử dụng hệ thống đăng nhập được bảo mật bởi Firebase. Thông tin tài khoản của bạn luôn được mã hóa và bảo vệ.
+           </p>
+           <button 
+             onClick={() => signOut(auth)}
+             className="text-red-500 font-black text-sm flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-xl transition-all"
+           >
+             <LogOut size={18} /> Đăng xuất khỏi thiết bị này
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main Root ---
 
 export default function App() {
@@ -1510,22 +1892,37 @@ export default function App() {
             <Route path="/course/:id" element={<CourseDetailPage user={user} />} />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="/rewards" element={<RewardsPage user={user} />} />
+            <Route path="/profile" element={<ProfilePage user={user} />} />
+            <Route path="/settings" element={<SettingsPage user={user} />} />
             <Route path="*" element={<div className="pt-40 text-center font-black text-4xl opacity-10">Sẽ sớm cập nhật...</div>} />
           </Routes>
         </main>
 
-        <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 py-12 px-6 transition-colors">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white">
-                <BookOpen size={24} />
+        <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 py-12 px-6 transition-colors text-slate-900 dark:text-white">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-slate-900 dark:bg-emerald-600 rounded-lg flex items-center justify-center text-white">
+                  <BookOpen size={20} />
+                </div>
+                <p className="font-extrabold text-lg md:text-xl">Self-Study Hub &copy; 2026</p>
               </div>
-              <p className="font-black">Self-Study Hub &copy; 2026</p>
             </div>
-            <nav className="flex gap-8">
-              <a href="#" className="text-sm font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Điều Khoản</a>
-              <a href="#" className="text-sm font-bold text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Liên Hệ</a>
-            </nav>
+
+            <div className="space-y-3 pt-6 border-t border-slate-50 dark:border-slate-800">
+              <div className="flex items-start gap-3 text-slate-500 dark:text-slate-400">
+                <MapPin size={18} className="shrink-0 mt-0.5" />
+                <p className="font-bold text-sm">
+                  <span className="opacity-70">Địa chỉ:</span> 470 Trần Đại Nghĩa, Phường Ngũ Hành Sơn, TP. Đà Nẵng
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+                <Phone size={18} className="shrink-0" />
+                <p className="font-bold text-sm">
+                  <span className="opacity-70">Điện thoại:</span> 0708019***
+                </p>
+              </div>
+            </div>
           </div>
         </footer>
 
