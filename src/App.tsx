@@ -429,9 +429,26 @@ const Navbar = ({ user, searchQuery, setSearchQuery, medalsCount, darkMode, setD
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 mt-4 overflow-hidden rounded-2xl shadow-xl transition-colors"
+            className="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 mt-4 overflow-hidden rounded-[24px] shadow-2xl transition-colors"
           >
-            <div className="p-6 flex flex-col gap-4">
+            <div className="p-4 flex flex-col gap-2">
+              <div className="relative mb-4">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Tìm kiếm..." 
+                  value={localSearch}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setIsMobileMenuOpen(false);
+                      handleSearchKeyPress(e);
+                    }
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl py-3 pl-12 pr-4 text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
               {navLinks.map(link => (
                 <Link 
                   key={link.path} 
@@ -439,22 +456,26 @@ const Navbar = ({ user, searchQuery, setSearchQuery, medalsCount, darkMode, setD
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={cn(
                     "flex items-center gap-4 p-4 rounded-xl transition-all",
-                    location.pathname === link.path ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 shadow-sm" : "text-slate-600 dark:text-slate-400 active:bg-slate-50 dark:active:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    location.pathname === link.path 
+                      ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400" 
+                      : "text-slate-600 dark:text-slate-400 active:bg-slate-50 dark:active:bg-slate-800"
                   )}
                 >
                   <span className={cn(location.pathname === link.path ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400")}>
                     {link.icon}
                   </span>
-                  <span className="font-bold text-lg">{link.name}</span>
+                  <span className="font-bold">{link.name}</span>
                 </Link>
               ))}
+
               {!user && (
                 <Link 
                   to="/login"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="mt-4 bg-emerald-600 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-3 text-lg hover:bg-emerald-500 transition-colors"
+                  className="flex items-center gap-4 p-4 rounded-xl text-emerald-600 font-black bg-emerald-50 dark:bg-emerald-900/20 mt-2"
                 >
-                  <LogIn size={22} /> Đăng nhập ngay
+                  <LogIn size={20} />
+                  <span>Đăng nhập ngay</span>
                 </Link>
               )}
             </div>
@@ -1162,7 +1183,7 @@ const SkillsPage = ({ searchQuery, setSearchQuery }: { searchQuery: string, setS
           </div>
 
           {isLoading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
               {[1, 2, 3].map(i => (
                 <div key={i} className="h-80 bg-white dark:bg-slate-900 rounded-[32px] animate-pulse border border-slate-100 dark:border-slate-800 shadow-sm" />
               ))}
@@ -1243,10 +1264,17 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
     }
   }, [id, user]);
 
-  const toggleLesson = async (lessonId: string, idx: number) => {
-    if (!user || !id || !course) return;
-    
+  const switchLesson = (idx: number) => {
     setActiveLessonIdx(idx);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const completeLesson = async (lessonId: string) => {
+    if (!user) {
+      alert("Vui lòng đăng nhập để lưu tiến độ học tập!");
+      return;
+    }
+    if (!id || !course) return;
 
     const newCompleted = completedLessons.includes(lessonId)
       ? completedLessons
@@ -1274,8 +1302,18 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
             earnedAt: serverTimestamp()
           }, { merge: true });
         }
+
+        // Auto move to next lesson if available
+        if (activeLessonIdx < course.lessons.length - 1) {
+          setTimeout(() => switchLesson(activeLessonIdx + 1), 500);
+        }
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `userProgress/${user.uid}_${id}`);
+      }
+    } else {
+      // If already completed, just move to next if available
+      if (activeLessonIdx < course.lessons.length - 1) {
+        switchLesson(activeLessonIdx + 1);
       }
     }
   };
@@ -1295,21 +1333,21 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
       <div className="grid lg:grid-cols-12 gap-8">
         {/* Left Column: Player & Content */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-black aspect-video rounded-[32px] overflow-hidden shadow-2xl relative group">
-            {activeLesson.videoId ? (
-              <iframe
-                src={`https://www.youtube.com/embed/${activeLesson.videoId}?autoplay=1&modestbranding=1&rel=0`}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-900">
-                <PlayCircle size={64} className="mb-4 opacity-20" />
-                <p className="font-bold">Video bài học đang được cập nhật</p>
+              <div className="bg-black aspect-video rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl relative group">
+                {activeLesson.videoId ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${activeLesson.videoId}?autoplay=1&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-900">
+                    <PlayCircle size={64} className="mb-4 opacity-20" />
+                    <p className="font-bold">Video bài học đang được cập nhật</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
           <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-[40px] shadow-3d-sm border border-slate-100 dark:border-slate-800 transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-50 dark:border-slate-800 pb-8">
@@ -1321,7 +1359,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => toggleLesson(activeLesson.id, activeLessonIdx)}
+                  onClick={() => completeLesson(activeLesson.id)}
                   className={cn(
                     "px-8 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
                     completedLessons.includes(activeLesson.id) 
@@ -1375,7 +1413,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
               {course.lessons.map((lesson, idx) => (
                 <button 
                   key={lesson.id}
-                  onClick={() => toggleLesson(lesson.id, idx)}
+                  onClick={() => switchLesson(idx)}
                   className={cn(
                     "w-full p-5 rounded-3xl border-2 transition-all text-left flex items-center gap-4 group",
                     activeLessonIdx === idx 
@@ -1432,7 +1470,7 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
         <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto font-medium">Tích lũy huy chương từ các khóa học để đổi lấy những phần quà giá trị.</p>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
         {rewards.map((rw, i) => (
           <motion.div 
             key={i}
@@ -1609,7 +1647,7 @@ const ProfilePage = ({ user }: { user: FirebaseUser | null }) => {
                       <div className="flex items-center gap-3 mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-full">Đang học</span>
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                          <Clock size={12} /> {p.lastAccessed?.toDate().toLocaleDateString('vi-VN')}
+                          <Clock size={12} /> {p.lastAccessed?.toDate ? p.lastAccessed.toDate().toLocaleDateString('vi-VN') : 'Đang xử lý...'}
                         </span>
                       </div>
                       <h4 className="text-lg font-black text-slate-900 dark:text-white mb-4 group-hover:text-emerald-600 transition-colors">ID Khóa học: {p.courseId}</h4>
@@ -1899,28 +1937,34 @@ export default function App() {
         </main>
 
         <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 py-12 px-6 transition-colors text-slate-900 dark:text-white">
-          <div className="max-w-7xl mx-auto space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-slate-900 dark:bg-emerald-600 rounded-lg flex items-center justify-center text-white">
-                  <BookOpen size={20} />
+          <div className="max-w-7xl mx-auto space-y-8">
+            <div className="grid md:grid-cols-2 gap-8 items-start">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-slate-900 dark:bg-emerald-600 rounded-lg flex items-center justify-center text-white">
+                    <BookOpen size={20} />
+                  </div>
+                  <p className="font-extrabold text-xl tracking-tight">Self-Study Hub &copy; 2026</p>
                 </div>
-                <p className="font-extrabold text-lg md:text-xl">Self-Study Hub &copy; 2026</p>
+                <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed max-w-md">
+                  Nền tảng tự học trực tuyến hàng đầu, cung cấp các lộ trình học tập tối ưu và tài nguyên chất lượng cao cho cộng đồng sinh viên.
+                </p>
               </div>
-            </div>
 
-            <div className="space-y-3 pt-6 border-t border-slate-50 dark:border-slate-800">
-              <div className="flex items-start gap-3 text-slate-500 dark:text-slate-400">
-                <MapPin size={18} className="shrink-0 mt-0.5" />
-                <p className="font-bold text-sm">
-                  <span className="opacity-70">Địa chỉ:</span> 470 Trần Đại Nghĩa, Phường Ngũ Hành Sơn, TP. Đà Nẵng
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-                <Phone size={18} className="shrink-0" />
-                <p className="font-bold text-sm">
-                  <span className="opacity-70">Điện thoại:</span> 0708019***
-                </p>
+              <div className="space-y-4 md:pt-2">
+                <p className="font-black text-xs uppercase tracking-widest text-slate-400 mb-4">Thông tin liên hệ</p>
+                <div className="grid gap-3">
+                  <div className="flex items-start gap-3 text-slate-500 dark:text-slate-400 transition-colors">
+                    <MapPin size={18} className="shrink-0 mt-0.5 text-emerald-500" />
+                    <p className="font-bold text-sm">
+                      470 Trần Đại Nghĩa, Phường Ngũ Hành Sơn, TP. Đà Nẵng
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 transition-colors">
+                    <Phone size={18} className="shrink-0 text-emerald-500" />
+                    <p className="font-bold text-sm">0708019***</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -52,7 +52,7 @@ async function startServer() {
         difficulty: 'Trung bình',
         category: 'Lập trình & CNTT',
         lessons: [
-          { id: 'js_l1', title: 'Let, Const và Arrow Functions', duration: '15:00', exercise: 'Chuyển đổi các hàm cũ sang Arrow function.', videoId: 'nc66_t2f6pE' }
+          { id: 'js_l1', title: 'Let, Const và Arrow Functions', duration: '15:00', exercise: 'Chuyển đổi các hàm cũ sang Arrow function.', videoId: 'PkZNo7MFNFg' }
         ]
       },
       { 
@@ -95,7 +95,7 @@ async function startServer() {
         difficulty: 'Cơ bản',
         category: 'Kinh tế - Marketing',
         lessons: [
-          { id: 'mkt_l1', title: 'SEO On-page cơ bản', duration: '18:00', exercise: 'Viết tiêu đề và mô tả chuẩn SEO cho 1 bài viết.', videoId: 'DvwS7cV9GmQ' }
+          { id: 'mkt_l1', title: 'SEO On-page cơ bản', duration: '18:00', exercise: 'Viết tiêu đề và mô tả chuẩn SEO cho 1 bài viết.', videoId: 'hF515-0Tduk' }
         ]
       },
       { 
@@ -109,7 +109,7 @@ async function startServer() {
         difficulty: 'Dễ',
         category: 'Kinh tế - Marketing',
         lessons: [
-          { id: 'fin_l1', title: 'Quy tắc 50/30/20', duration: '15:00', exercise: 'Lập bảng chi tiêu hàng tháng theo quy tắc này.', videoId: 'v_L-vV96Mps' }
+          { id: 'fin_l1', title: 'Quy tắc 50/30/20', duration: '15:00', exercise: 'Lập bảng chi tiêu hàng tháng theo quy tắc này.', videoId: '57fIs3D8Zuk' }
         ]
       },
       { 
@@ -123,7 +123,7 @@ async function startServer() {
         difficulty: 'Dễ',
         category: 'Kỹ năng mềm',
         lessons: [
-          { id: 'soft_l1', title: 'Kỹ thuật Storytelling', duration: '22:00', exercise: 'Kể một câu chuyện ngắn trong vòng 2 phút.', videoId: 'HAnw168huqA' }
+          { id: 'soft_l1', title: 'Kỹ thuật Storytelling', duration: '22:00', exercise: 'Kể một câu chuyện ngắn trong vòng 2 phút.', videoId: 'Nj-hdQMa3uA' }
         ]
       },
       { 
@@ -137,7 +137,7 @@ async function startServer() {
         difficulty: 'Cơ bản',
         category: 'Kỹ năng mềm',
         lessons: [
-          { id: 'time_l1', title: 'Deep Work Workflow', duration: '20:00', exercise: 'Thiết lập thời gian biểu Deep Work cho tuần tới.', videoId: 'mS_6F6T-n9Q' }
+          { id: 'time_l1', title: 'Deep Work Workflow', duration: '20:00', exercise: 'Thiết lập thời gian biểu Deep Work cho tuần tới.', videoId: 'Z_S_fT4S-cE' }
         ]
       },
       { 
@@ -165,7 +165,7 @@ async function startServer() {
         difficulty: 'Cơ bản',
         category: 'Lập trình & CNTT',
         lessons: [
-          { id: 'ai_l1', title: 'Generative AI là gì?', duration: '20:00', exercise: 'Sử dụng ChatGPT hiệu quả với Prompt Engineering.', videoId: '5Z1WvLzN6-4' }
+          { id: 'ai_l1', title: 'Generative AI là gì?', duration: '20:00', exercise: 'Sử dụng ChatGPT hiệu quả với Prompt Engineering.', videoId: '2ePf9rue1ao' }
         ]
       }
     ];
@@ -245,25 +245,24 @@ async function startServer() {
     const query = (req.query.q as string || "").toLowerCase();
     if (!query || query.length < 2) return res.json([]);
 
-    // Get suggestions from featured courses
-    // In a real app we might use Gemini or a cached index
-    const FEATURED_COURSES = [
-      { id: 'py_01', title: 'Lập trình Python từ cơ bản đến nâng cao' },
-      { id: 'js_01', title: 'JavaScript Modern ES6+: Từ Zero đến Hero' },
-      { id: 'ielts_01', title: 'Lộ trình học IELTS 7.0+ cho người mất gốc' },
-      { id: 'toeic_01', title: 'Bí kíp chinh phục TOEIC 900+' },
-      { id: 'mkt_01', title: 'Digital Marketing Fundamentals 2026' },
-      { id: 'finance_01', title: 'Quản lý tài chính cá nhân cho người trẻ' },
-      { id: 'soft_01', title: 'Kỹ năng Thuyết trình lôi cuốn' },
-      { id: 'time_01', title: 'Quản lý thời gian & Năng suất đột phá' },
-      { id: 'dl_01', title: 'Deep Learning căn bản với TensorFlow' },
-      { id: 'ai_01', title: 'Trí tuệ nhân tạo (AI) cho mọi người' }
+    // Suggestions from featured courses titles
+    const SUGGESTION_POOL = [
+      'Lập trình Python từ cơ bản đến nâng cao',
+      'JavaScript Modern ES6+: Từ Zero đến Hero',
+      'Lộ trình học IELTS 7.0+ cho người mất gốc',
+      'Bí kíp chinh phục TOEIC 900+',
+      'Digital Marketing Fundamentals 2026',
+      'Quản lý tài chính cá nhân cho người trẻ',
+      'Kỹ năng Thuyết trình lôi cuốn',
+      'Quản lý thời gian & Năng suất đột phá',
+      'Deep Learning căn bản với TensorFlow',
+      'Trí tuệ nhân tạo (AI) cho mọi người'
     ];
 
-    const suggestions = FEATURED_COURSES
-      .filter(c => c.title.toLowerCase().includes(query))
+    const suggestions = SUGGESTION_POOL
+      .filter(title => title.toLowerCase().includes(query))
       .slice(0, 5)
-      .map(c => ({ id: c.id, title: c.title, type: 'course' }));
+      .map((title, index) => ({ id: `suggest_${index}`, title, type: 'course' }));
 
     res.json(suggestions);
   });
