@@ -538,6 +538,21 @@ const LoginPage = ({ user }: { user: FirebaseUser | null }) => {
     }
   };
 
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      // Trying to sign in with a demo account. 
+      // If it fails, we show a helpful message.
+      await signInWithEmailAndPassword(auth, "demo@example.com", "123456");
+      navigate("/");
+    } catch (err: any) {
+      setError("Tài khoản Demo (demo@example.com / 123456) chưa tồn tại. Bạn hãy sử dụng Google Login hoặc tự đăng ký một tài khoản để test nhé!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (user) {
     return (
       <div className="pt-60 text-center flex flex-col items-center gap-4">
@@ -632,6 +647,16 @@ const LoginPage = ({ user }: { user: FirebaseUser | null }) => {
           >
             {isLoading ? <Loader2 className="animate-spin mx-auto" /> : "Đăng nhập hệ thống"}
           </button>
+
+          <div className="pt-2 text-center">
+            <button 
+              type="button"
+              onClick={handleDemoLogin}
+              className="text-xs font-black text-emerald-600 hover:text-emerald-500 uppercase tracking-widest flex items-center justify-center gap-2 mx-auto py-2"
+            >
+              <Zap size={14} /> Đăng nhập nhanh (Demo)
+            </button>
+          </div>
 
           <p className="text-center text-sm text-slate-400 font-bold py-4">
             Chưa có tài khoản? <Link to="/register" className="text-emerald-600 hover:underline">Đăng ký ngay</Link>
