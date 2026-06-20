@@ -65,6 +65,23 @@ service cloud.firestore {
       }
     }
 
+    // --- Redemptions (Pillar 1 & 8) ---
+    match /redemptions/{redemptionId} {
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidRedemption(incoming());
+      allow update: if false;
+      allow delete: if false;
+
+      function isValidRedemption(data) {
+        return data.userId == request.auth.uid
+            && data.rewardTitle is string && data.rewardTitle.size() <= 200
+            && data.cost is number && data.cost > 0
+            && data.redeemedAt == request.time;
+      }
+    }
+
     // --- Posts (Community Feed) ---
     match /posts/{postId} {
       allow read: if true; 

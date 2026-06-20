@@ -207,20 +207,8 @@ async function startServer() {
         students: Math.floor(Math.random() * 5000),
         difficulty: 'Tự học',
         lessons: [
-          { 
-            id: `${item.id.videoId}_1`, 
-            title: 'Bài học 1: Tổng quan', 
-            duration: '15:00', 
-            exercise: 'Tóm tắt nội dung chính của video.',
-            videoId: item.id.videoId // <--- BỔ SUNG DÒNG NÀY
-          },
-          { 
-            id: `${item.id.videoId}_2`, 
-            title: 'Bài học 2: Thực hành', 
-            duration: '25:00', 
-            exercise: 'Làm theo hướng dẫn trong video.',
-            videoId: item.id.videoId // <--- BỔ SUNG DÒNG NÀY
-          }
+          { id: `${item.id.videoId}_1`, title: 'Bài học 1: Tổng quan', duration: '15:00', exercise: 'Tóm tắt nội dung chính của video.', videoId: item.id.videoId },
+          { id: `${item.id.videoId}_2`, title: 'Bài học 2: Thực hành', duration: '25:00', exercise: 'Làm theo hướng dẫn trong video.', videoId: item.id.videoId }
         ]
       }));
 

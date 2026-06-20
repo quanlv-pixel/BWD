@@ -36,6 +36,18 @@
         "medalName": { "type": "string" },
         "earnedAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "Redemption": {
+      "title": "Reward Redemption",
+      "description": "Records of rewards redeemed by users.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "rewardTitle": { "type": "string" },
+        "cost": { "type": "number" },
+        "redeemedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "rewardTitle", "cost"]
     }
   },
   "firestore": {
@@ -50,6 +62,10 @@
     "medals/{medalId}": {
       "schema": "Medal",
       "description": "Collection of medals awarded to users."
+    },
+    "redemptions/{redemptionId}": {
+      "schema": "Redemption",
+      "description": "Collection of rewards redeemed by users."
     }
   }
 }

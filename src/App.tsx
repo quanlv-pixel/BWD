@@ -1374,6 +1374,22 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                 )}
               </div>
 
+              {activeLesson.videoId && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-100/50 dark:bg-slate-900/40 px-6 py-4 rounded-3xl border border-slate-100 dark:border-slate-800 transition-colors">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">
+                    Gặp sự cố khi phát video? Một số video Youtube có thể giới hạn phát trong website.
+                  </div>
+                  <a 
+                    href={`https://www.youtube.com/watch?v=${activeLesson.videoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 text-xs font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1.5 uppercase tracking-wider"
+                  >
+                    Xem trực tiếp trên YouTube <ExternalLink size={14} />
+                  </a>
+                </div>
+              )}
+
           <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-[40px] shadow-3d-sm border border-slate-100 dark:border-slate-800 transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-50 dark:border-slate-800 pb-8">
               <div>
@@ -1481,6 +1497,13 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
 };
 
 const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
+  const [redemptions, setRedemptions] = useState<any[]>([]);
+  const [totalMedals, setTotalMedals] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const navigate = useNavigate();
+
   const rewards = [
     { title: "Gói Premium 1 Tháng", cost: 3, icon: <Zap className="text-emerald-500" />, desc: "Mở khóa toàn bộ tài liệu chuyên sâu và bài giải mẫu." },
     { title: "Giảm giá 50% Khóa Offline", cost: 5, icon: <Gift className="text-blue-500" />, desc: "Áp dụng cho các khóa học thực tế tại trung tâm đối tác." },
@@ -1488,34 +1511,179 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
     { title: "Thẻ Quà Tặng Starbucks", cost: 10, icon: <Heart className="text-red-500" />, desc: "Phần thưởng cho những nỗ lực học tập không mệt mỏi." }
   ];
 
+  useEffect(() => {
+    if (!user) return;
+
+    // Fetch Medals
+    const medalsQ = query(collection(db, "medals"), where("userId", "==", user.uid));
+    const unsubMedals = onSnapshot(medalsQ, (snap) => {
+      setTotalMedals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "medals");
+    });
+
+    // Fetch Redemptions
+    const redemptionsQ = query(collection(db, "redemptions"), where("userId", "==", user.uid));
+    const unsubRedemptions = onSnapshot(redemptionsQ, (snap) => {
+      setRedemptions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      handleFirestoreError(err, OperationType.LIST, "redemptions");
+    });
+
+    return () => {
+      unsubMedals();
+      unsubRedemptions();
+    };
+  }, [user]);
+
+  const totalEarnedMedals = totalMedals.length;
+  const totalUsedMedals = redemptions.reduce((acc, curr) => acc + (curr.cost || 0), 0);
+  const availableMedals = totalEarnedMedals - totalUsedMedals;
+
+  const handleRedeem = async (rw: typeof rewards[0]) => {
+    if (!user) {
+      alert("Vui lòng đăng nhập để đổi quà!");
+      return;
+    }
+
+    if (availableMedals < rw.cost) {
+      setErrorMsg(`Bạn không đủ huy chương để đổi "${rw.title}". Bạn cần thêm ${rw.cost - availableMedals} huy chương nữa!`);
+      setSuccessMsg("");
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      // Create random gift code
+      const randHex = Math.random().toString(16).substring(2, 8).toUpperCase();
+      const code = `SSH-${rw.title.includes("Starbucks") ? "STAR" : rw.title.includes("Premium") ? "PREM" : "GIFT"}-${randHex}`;
+
+      const redemptionId = `red_${user.uid}_${Date.now()}`;
+      const redemptionRef = doc(db, "redemptions", redemptionId);
+
+      await setDoc(redemptionRef, {
+        userId: user.uid,
+        rewardTitle: rw.title,
+        cost: rw.cost,
+        promoCode: code,
+        redeemedAt: serverTimestamp()
+      });
+
+      setSuccessMsg(`Chúc mừng! Bạn đã đổi thành công "${rw.title}". Mã ưu đãi của bạn: ${code}`);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg("Đã xảy ra lỗi trong quá trình đổi quà. Vui lòng thử lại!");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="pt-40 pb-20 px-6 max-w-7xl mx-auto text-center dark:bg-slate-950 transition-colors">
+        <div className="max-w-md mx-auto bg-white dark:bg-slate-900 p-10 rounded-[45px] shadow-3d-sm border border-slate-100 dark:border-slate-800">
+          <Gift size={64} className="text-amber-500 mx-auto mb-6 animate-pulse" />
+          <h2 className="text-2xl font-black mb-4">Vui lòng đăng nhập để đổi quà</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm font-medium">Bằng cách tích lũy huy chương qua từng khóa học, bạn sẽ có cơ hội đổi nhiều quà tặng hấp dẫn.</p>
+          <Link to="/login" className="block w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black transition-all">Đăng nhập ngay</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto dark:bg-slate-950 transition-colors">
-      <div className="text-center mb-16">
-        <h1 className="text-5xl font-black mb-4 text-slate-900 dark:text-white">Cửa Hàng Đổi Quà</h1>
-        <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto font-medium">Tích lũy huy chương từ các khóa học để đổi lấy những phần quà giá trị.</p>
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12 bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
+        <div>
+          <h1 className="text-4xl font-black mb-2 text-slate-900 dark:text-white">Cửa Hàng Đổi Quà</h1>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">Tích lũy huy chương từ việc hoàn thành khóa học để đổi quà giá trị.</p>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="px-6 py-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/35 rounded-3xl text-center">
+            <p className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Huy chương hiện có</p>
+            <p className="text-3xl font-black text-amber-700 dark:text-amber-300 flex items-center justify-center gap-2 mt-1">
+              <Award size={28} className="animate-bounce" /> {availableMedals} <span className="text-xs text-slate-400 font-bold">/ {totalEarnedMedals}</span>
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-        {rewards.map((rw, i) => (
-          <motion.div 
-            key={i}
-            whileHover={{ y: -5 }}
-            className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm flex flex-col items-center text-center group"
-          >
-            <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center mb-6 text-3xl shadow-inner group-hover:scale-110 transition-all">
-              {rw.icon}
-            </div>
-            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3">{rw.title}</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mb-4">Giá: {rw.cost} Huy chương</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-8 flex-1">{rw.desc}</p>
-            <button 
-              disabled={!user}
-              className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-600 dark:hover:bg-emerald-600 hover:text-white disabled:opacity-50 transition-all active:scale-95"
+      {errorMsg && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-5 mb-8 rounded-2xl bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 text-sm font-bold flex items-center gap-3 border border-red-100 dark:border-red-900/20">
+          <X size={18} /> {errorMsg}
+        </motion.div>
+      )}
+
+      {successMsg && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-5 mb-8 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold flex items-center gap-3 border border-emerald-100 dark:border-emerald-900/20">
+          <CheckCircle size={18} /> {successMsg}
+        </motion.div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-16">
+        {rewards.map((rw, i) => {
+          const isAffordable = availableMedals >= rw.cost;
+          return (
+            <motion.div 
+              key={i}
+              whileHover={{ y: -5 }}
+              className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm flex flex-col items-center text-center group"
             >
-              Đổi Quà
-            </button>
-          </motion.div>
-        ))}
+              <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center mb-6 text-3xl shadow-inner group-hover:scale-110 transition-all">
+                {rw.icon}
+              </div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3">{rw.title}</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mb-4">Giá: {rw.cost} Huy chương</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-8 flex-1">{rw.desc}</p>
+              <button 
+                onClick={() => handleRedeem(rw)}
+                disabled={isProcessing}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95",
+                  isAffordable 
+                    ? "bg-slate-900 dark:bg-emerald-600 text-white shadow-md hover:bg-emerald-500 hover:shadow-lg hover:scale-[1.02] cursor-pointer" 
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                )}
+              >
+                {isProcessing ? "Đang xử lý..." : isAffordable ? "Đổi Quà" : "Chưa đủ huy chương"}
+              </button>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
+        <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+          <Gift size={24} className="text-emerald-500 animate-pulse" /> Quà tặng đã đổi của bạn
+        </h3>
+        {redemptions.length > 0 ? (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {redemptions.map((red) => (
+              <div key={red.id} className="py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-lg font-black text-slate-900 dark:text-white">{red.rewardTitle}</h4>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wide mt-1">
+                    Giá: {red.cost} Huy chương &bull; Đổi vào: {red.redeemedAt?.toDate ? red.redeemedAt.toDate().toLocaleString('vi-VN') : 'Vừa xong'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-sm font-black text-slate-700 dark:text-slate-350">
+                    {red.promoCode || "SSH-GIFT-DFE3"}
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full">Sẵn sàng dùng</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+            <Gift size={48} className="mx-auto mb-4 opacity-30" />
+            <p className="font-bold text-sm">Bạn chưa đổi phần quà nào. Hãy tích cực hoàn thành khóa học để nhận huy chương nhé!</p>
+          </div>
+        )}
       </div>
     </div>
   );
