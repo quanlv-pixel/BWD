@@ -35,4 +35,5 @@ export interface Course {
   difficulty: string;
   lessons: Lesson[];
   date?: string;
+  category?: string;
 }

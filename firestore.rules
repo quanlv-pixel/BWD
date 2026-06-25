@@ -33,11 +33,10 @@ service cloud.firestore {
 
     // --- User Progress (Pillar 1) ---
     match /userProgress/{progressId} {
-      allow get: if isOwner(existing().userId);
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
       
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidProgress(incoming());
-      allow update: if isOwner(existing().userId) && isValidProgress(incoming())
+      allow update: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid) && isValidProgress(incoming())
                      && incoming().diff(existing()).affectedKeys().hasOnly(['completedLessonIds', 'isCompleted', 'lastAccessed']);
 
       function isValidProgress(data) {
@@ -50,8 +49,7 @@ service cloud.firestore {
 
     // --- Medals (Pillar 1 & 8) ---
     match /medals/{medalId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
       
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidMedal(incoming());
       allow update: if false;
@@ -67,8 +65,7 @@ service cloud.firestore {
 
     // --- Redemptions (Pillar 1 & 8) ---
     match /redemptions/{redemptionId} {
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
       
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidRedemption(incoming());
       allow update: if false;

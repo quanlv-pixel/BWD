@@ -1,7 +1,0 @@
-services:
-  bwd-app:
-    build: .
-    container_name: bwd-frontend-app
-    restart: unless-stopped
-    ports:
-      - "8090:3000"

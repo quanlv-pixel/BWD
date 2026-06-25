@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bot, Send, X, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { GoogleGenAI } from "@google/genai";
 import { cn } from "../lib/utils";
 
 export function AIAssistant() {
@@ -27,23 +26,24 @@ export function AIAssistant() {
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          ...messages.map(m => ({
-            role: m.role === "model" ? "model" as const : "user" as const,
-            parts: [{ text: m.text }]
-          })),
-          { role: "user", parts: [{ text: userMessage }] }
-        ],
-        config: {
-          systemInstruction: "Bạn là trợ lý AI thân thiện của trang web Self-Study Hub. Hãy tư vấn về lộ trình học tập, tài liệu và kỹ năng cho sinh viên Việt Nam. Trả lời ngắn gọn, chuyên nghiệp và sử dụng Markdown.",
-        }
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages,
+          userMessage
+        })
       });
 
-      const botResponse = response.text || "Xin lỗi, mình đang gặp chút trục trặc. Bạn thử lại nhé!";
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Lỗi máy chủ khi tạo câu trả lời.");
+      }
+
+      const data = await response.json();
+      const botResponse = data.text || "Xin lỗi, mình đang gặp chút trục trặc. Bạn thử lại nhé!";
       setMessages(prev => [...prev, { role: "model", text: botResponse }]);
     } catch (error) {
       console.error("AI Error:", error);

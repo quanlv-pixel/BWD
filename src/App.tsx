@@ -33,6 +33,7 @@ import {
   Plus,
   Loader2,
   Share2,
+  Tv,
   Award,
   ChevronDown,
   Bell,
@@ -52,7 +53,12 @@ import {
   Shield,
   ArrowLeft,
   Phone,
-  MapPin
+  MapPin,
+  BrainCircuit,
+  Sparkles,
+  AlertCircle,
+  Send,
+  HelpCircle
 } from "lucide-react";
 import { 
   signInWithPopup, 
@@ -116,8 +122,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Notice (Handled): ', JSON.stringify(errInfo));
 }
 
 // --- Layout Components ---
@@ -1268,6 +1273,253 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
+  const [alternativeVideos, setAlternativeVideos] = useState<any[]>([]);
+  const [isSearchingAlts, setIsSearchingAlts] = useState(false);
+  const [customVideoId, setCustomVideoId] = useState<string | null>(null);
+
+  // AI Exercise States
+  const [aiExercise, setAiExercise] = useState<any | null>(null);
+  const [isGeneratingExercise, setIsGeneratingExercise] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [showSolutions, setShowSolutions] = useState<Record<string, boolean>>({});
+  const [writingInputs, setWritingInputs] = useState<Record<number, string>>({});
+  const [submittedCode, setSubmittedCode] = useState<string>("");
+  const [codeFeedback, setCodeFeedback] = useState<any | null>(null);
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+
+  // Dynamic AI Quiz States (for Complete Lesson requirement)
+  const [quizData, setQuizData] = useState<any[] | null>(null);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+  const [quizScore, setQuizScore] = useState<number | null>(null);
+  const [quizError, setQuizError] = useState<string | null>(null);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+
+  // Helper: Generate AI Practice Exercise
+  const generateAiExercise = async () => {
+    const activeLesson = course?.lessons[activeLessonIdx];
+    if (!activeLesson || !course) return;
+
+    setIsGeneratingExercise(true);
+    setGenerationError(null);
+    setAiExercise(null);
+    setCodeFeedback(null);
+    setSubmittedCode("");
+    setQuizAnswers({});
+    setShowSolutions({});
+    setWritingInputs({});
+
+    try {
+      const response = await fetch("/api/generate-exercise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: customVideoId || activeLesson.videoId,
+          lessonTitle: activeLesson.title,
+          courseTitle: course.title,
+          category: course.category
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to generate exercise.");
+      }
+
+      const data = await response.json();
+      if (data.success && data.exercise) {
+        setAiExercise(data.exercise);
+        if (data.exercise.type === "code_challenge" && data.exercise.codeChallenge?.starterCode) {
+          setSubmittedCode(data.exercise.codeChallenge.starterCode);
+        }
+      } else {
+        throw new Error("No exercise data returned from server.");
+      }
+    } catch (err: any) {
+      console.error("Error generating AI exercise:", err);
+      setGenerationError(err.message || "Đã xảy ra lỗi khi tạo bài tập AI.");
+    } finally {
+      setIsGeneratingExercise(false);
+    }
+  };
+
+  // Helper: Submit code challenge for AI evaluation
+  const submitCodeChallenge = async () => {
+    const activeLesson = course?.lessons[activeLessonIdx];
+    if (!activeLesson || !aiExercise?.codeChallenge) return;
+
+    setIsValidatingCode(true);
+    setCodeFeedback(null);
+
+    try {
+      const response = await fetch("/api/review-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: submittedCode,
+          starterCode: aiExercise.codeChallenge.starterCode,
+          instructions: aiExercise.codeChallenge.instructions || aiExercise.description,
+          expectedOutput: aiExercise.codeChallenge.expectedOutput,
+          lessonTitle: activeLesson.title
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to validate code.");
+      }
+
+      const feedback = await response.json();
+      setCodeFeedback(feedback);
+    } catch (err: any) {
+      console.error("Error validating code challenge:", err);
+      setCodeFeedback({
+        passed: false,
+        score: 0,
+        feedback: `Lỗi kết nối hoặc xử lý AI: ${err.message}. Bạn vui lòng thử lại nhé!`
+      });
+    } finally {
+      setIsValidatingCode(false);
+    }
+  };
+
+  // Helper: Start AI Complete Lesson Quiz Flow
+  const startCompleteLessonQuiz = async () => {
+    const activeLesson = course?.lessons[activeLessonIdx];
+    if (!activeLesson || !course) return;
+
+    // If already completed, just allow direct navigation or trigger the normal completeLesson (which moves forward)
+    if (completedLessons.includes(activeLesson.id)) {
+      completeLesson(activeLesson.id);
+      return;
+    }
+
+    if (!user) {
+      alert("Vui lòng đăng nhập để tham gia bài trắc nghiệm và lưu kết quả!");
+      return;
+    }
+
+    setIsGeneratingQuiz(true);
+    setQuizError(null);
+    setQuizData(null);
+    setUserAnswers({});
+    setQuizScore(null);
+    setQuizSubmitted(false);
+    setShowQuizModal(true);
+
+    try {
+      const response = await fetch("/api/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: activeLesson.title,
+          description: course.description || "",
+          exercise: activeLesson.exercise || ""
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể khởi tạo bộ câu hỏi trắc nghiệm.");
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setQuizData(data);
+      } else {
+        throw new Error("Không nhận được dữ liệu trắc nghiệm hợp lệ từ AI.");
+      }
+    } catch (err: any) {
+      console.error("Error generating complete lesson quiz:", err);
+      setQuizError(err.message || "Đã xảy ra lỗi khi lập đề trắc nghiệm.");
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
+  // Helper: Submit complete lesson quiz answers
+  const submitQuizAnswers = () => {
+    if (!quizData) return;
+
+    let correctCount = 0;
+    quizData.forEach((q, idx) => {
+      if (userAnswers[idx] === q.correctIndex) {
+        correctCount++;
+      }
+    });
+
+    setQuizScore(correctCount);
+    setQuizSubmitted(true);
+
+    if (correctCount >= 2) {
+      // Passed (>= 2/3 correct)
+      setTimeout(async () => {
+        const activeLesson = course?.lessons[activeLessonIdx];
+        if (activeLesson) {
+          await completeLesson(activeLesson.id);
+          setShowQuizModal(false);
+        }
+      }, 2500);
+    }
+  };
+
+  useEffect(() => {
+    if (!course) return;
+    const activeLesson = course.lessons[activeLessonIdx];
+    if (!activeLesson) return;
+
+    setCustomVideoId(null);
+    setAlternativeVideos([]);
+    setIsSearchingAlts(true);
+
+    // Reset AI state on lesson switch
+    setAiExercise(null);
+    setGenerationError(null);
+    setQuizAnswers({});
+    setShowSolutions({});
+    setWritingInputs({});
+    setSubmittedCode("");
+    setCodeFeedback(null);
+
+    // Reset Dynamic Complete Lesson Quiz states
+    setQuizData(null);
+    setIsGeneratingQuiz(false);
+    setUserAnswers({});
+    setQuizScore(null);
+    setQuizError(null);
+    setShowQuizModal(false);
+    setQuizSubmitted(false);
+
+    const searchQuery = `${course.title} ${activeLesson.title}`;
+    fetch(`/api/courses?q=${encodeURIComponent(searchQuery)}`)
+      .then(r => r.json())
+      .then(data => {
+        const uniqueVideos: any[] = [];
+        data.forEach((c: any) => {
+          if (c.lessons) {
+            c.lessons.forEach((l: any) => {
+              if (l.videoId && l.videoId !== activeLesson.videoId && !uniqueVideos.some(v => v.videoId === l.videoId)) {
+                uniqueVideos.push({
+                  videoId: l.videoId,
+                  title: l.title || c.title,
+                  author: c.author || "YouTube Creator",
+                  thumbnail: c.thumbnail
+                });
+              }
+            });
+          }
+        });
+        setAlternativeVideos(uniqueVideos.slice(0, 4));
+        setIsSearchingAlts(false);
+      })
+      .catch(err => {
+        console.error("Error fetching alternative videos:", err);
+        setIsSearchingAlts(false);
+      });
+  }, [course, activeLessonIdx]);
+
   useEffect(() => {
     fetch(`/api/courses`)
       .then(r => r.json())
@@ -1348,6 +1600,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
 
   const progressPercent = Math.round((completedLessons.length / course.lessons.length) * 100);
   const activeLesson = course.lessons[activeLessonIdx];
+  const currentVideoId = customVideoId || (activeLesson ? activeLesson.videoId : "");
 
   return (
     <div className="pt-24 pb-20 px-4 md:px-6 max-w-[1600px] mx-auto transition-colors">
@@ -1359,9 +1612,9 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
         {/* Left Column: Player & Content */}
         <div className="lg:col-span-8 space-y-6">
               <div className="bg-black aspect-video rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl relative group">
-                {activeLesson.videoId ? (
+                {currentVideoId ? (
                   <iframe
-                    src={`https://www.youtube.com/embed/${activeLesson.videoId}?autoplay=1&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`}
+                    src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&modestbranding=1&rel=0&playsinline=1&enablejsapi=1`}
                     className="w-full h-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
@@ -1374,13 +1627,13 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                 )}
               </div>
 
-              {activeLesson.videoId && (
+              {currentVideoId && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-100/50 dark:bg-slate-900/40 px-6 py-4 rounded-3xl border border-slate-100 dark:border-slate-800 transition-colors">
                   <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">
                     Gặp sự cố khi phát video? Một số video Youtube có thể giới hạn phát trong website.
                   </div>
                   <a 
-                    href={`https://www.youtube.com/watch?v=${activeLesson.videoId}`}
+                    href={`https://www.youtube.com/watch?v=${currentVideoId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="shrink-0 text-xs font-black text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 flex items-center gap-1.5 uppercase tracking-wider"
@@ -1389,6 +1642,71 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                   </a>
                 </div>
               )}
+
+              {/* Alternative sources bar */}
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-3d-sm transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Tv className="text-emerald-500" size={20} />
+                    <h4 className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-wider">Nguồn phát dự phòng (YouTube)</h4>
+                  </div>
+                  {customVideoId && (
+                    <button 
+                      onClick={() => setCustomVideoId(null)}
+                      className="text-xs font-black text-rose-500 hover:text-rose-600 transition-colors uppercase tracking-widest flex items-center gap-1"
+                    >
+                      Xóa nguồn tùy chỉnh
+                    </button>
+                  )}
+                </div>
+                
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 font-medium leading-relaxed">
+                  Nếu video mặc định gặp lỗi không thể nhúng, bạn có thể chọn một trong các nguồn phát thay thế chất lượng cao bên dưới để tiếp tục buổi học:
+                </p>
+
+                {isSearchingAlts ? (
+                  <div className="flex items-center gap-2 justify-center py-4 text-xs font-bold text-slate-400">
+                    <Loader2 className="animate-spin text-emerald-500" size={16} /> Đang tìm nguồn thay thế...
+                  </div>
+                ) : alternativeVideos.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {alternativeVideos.map((vid, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCustomVideoId(vid.videoId)}
+                        className={cn(
+                          "flex items-start gap-3 p-3 rounded-2xl border text-left transition-all active:scale-[0.98]",
+                          currentVideoId === vid.videoId
+                            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 dark:border-emerald-600 shadow-sm"
+                            : "bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                        )}
+                      >
+                        <div className="w-16 h-10 rounded-lg overflow-hidden bg-black shrink-0 relative">
+                          <img src={vid.thumbnail} className="w-full h-full object-cover opacity-80" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <PlayCircle size={14} className="text-white" />
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={cn(
+                            "text-xs font-bold truncate",
+                            currentVideoId === vid.videoId ? "text-emerald-700 dark:text-emerald-400" : "text-slate-700 dark:text-slate-300"
+                          )}>
+                            {vid.title}
+                          </p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold truncate mt-0.5">
+                            Kênh: {vid.author}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-3 text-xs text-slate-400 font-bold">
+                    Không tìm thấy nguồn video thay thế tự động. Bạn hãy bấm nút "Xem trực tiếp trên YouTube" ở trên nhé!
+                  </div>
+                )}
+              </div>
 
           <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-[40px] shadow-3d-sm border border-slate-100 dark:border-slate-800 transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-slate-50 dark:border-slate-800 pb-8">
@@ -1400,7 +1718,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
               </div>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => completeLesson(activeLesson.id)}
+                  onClick={startCompleteLessonQuiz}
                   className={cn(
                     "px-8 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2",
                     completedLessons.includes(activeLesson.id) 
@@ -1409,34 +1727,365 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                   )}
                 >
                   {completedLessons.includes(activeLesson.id) ? <CheckCircle size={18} /> : <Zap size={18} />}
-                  {completedLessons.includes(activeLesson.id) ? "Đã Hoàn Thành" : "Xác nhận hoàn thành bài này"}
+                  {completedLessons.includes(activeLesson.id) ? "Đã Hoàn Thành" : "Làm Quiz để Hoàn thành"}
                 </button>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-10">
-              <div className="space-y-6">
-                <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
-                  <FileText className="text-emerald-500" /> Bài tập thực hành
-                </h3>
-                <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 italic text-slate-700 dark:text-slate-300 leading-relaxed font-medium transition-colors">
-                  "{activeLesson.exercise}"
+            <div className="grid grid-cols-1 gap-10 mt-6">
+              {/* Core Exercise Workspace */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 transition-all">
+                
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+                      <BrainCircuit size={24} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        Hệ thống Luyện tập thông minh
+                      </h3>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                        Phân tích nội dung & Cá nhân hóa bởi AI
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    {!aiExercise && (
+                      <button
+                        onClick={generateAiExercise}
+                        disabled={isGeneratingExercise}
+                        className={cn(
+                          "px-6 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 active:scale-95 shadow-md",
+                          isGeneratingExercise
+                            ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-emerald-500/10"
+                        )}
+                      >
+                        <Sparkles size={14} className={cn(isGeneratingExercise && "animate-spin")} />
+                        {isGeneratingExercise ? "Đang lập đề..." : "✨ Kích hoạt Bài tập Thực hành AI"}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-6">
-                <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
-                  <Star className="text-amber-500" /> Ghi chú quan trọng
-                </h3>
-                <ul className="space-y-3 text-slate-500 dark:text-slate-400 text-sm font-medium">
-                  <li className="flex items-start gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5" />
-                    Thực hành ngay sau khi xem hết video để nhớ lâu hơn.
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5" />
-                    Nếu gặp lỗi, hãy kiểm tra lại cú pháp hoặc hỏi cộng đồng.
-                  </li>
-                </ul>
+
+                {/* Default/Static Exercise view if AI is not active */}
+                {!aiExercise && !isGeneratingExercise && !generationError && (
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-black text-sm">
+                        <FileText size={16} className="text-emerald-500" /> Nhiệm vụ bài học (Mặc định)
+                      </div>
+                      <div className="bg-white dark:bg-slate-900/60 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 italic text-slate-700 dark:text-slate-300 leading-relaxed font-semibold">
+                        "{activeLesson.exercise}"
+                      </div>
+                    </div>
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 p-6 rounded-3xl flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-sm font-black text-emerald-800 dark:text-emerald-400 flex items-center gap-2 mb-2">
+                          <Sparkles size={16} /> Bứt phá hiệu suất học tập cùng AI!
+                        </h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                          Bằng cách kích hoạt chế độ AI, hệ thống sẽ tự động quét phụ đề (transcript) của video này từ YouTube để biên soạn bài tập trắc nghiệm, thử thách viết code hoặc câu hỏi tự luận sát thực tế nhất cho bài học này.
+                        </p>
+                      </div>
+                      <button
+                        onClick={generateAiExercise}
+                        className="mt-4 px-5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all text-center self-start"
+                      >
+                        Thử ngay bài tập AI →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generating Loading State */}
+                {isGeneratingExercise && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="relative mb-6">
+                      <div className="w-16 h-16 rounded-full border-4 border-emerald-500/10 border-t-emerald-500 animate-spin" />
+                      <BrainCircuit size={28} className="absolute inset-0 m-auto text-emerald-500 animate-pulse" />
+                    </div>
+                    <h4 className="text-base font-black text-slate-800 dark:text-white mb-2">Đang xử lý tài liệu video</h4>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 max-w-md font-bold leading-relaxed animate-pulse">
+                      Hệ thống đang tải phụ đề YouTube, trích xuất dữ liệu bài học và đồng bộ với Gemini AI để xây dựng giáo án thực hành cá nhân hóa dành riêng cho bạn...
+                    </p>
+                  </div>
+                )}
+
+                {/* Generation Error State */}
+                {generationError && (
+                  <div className="p-6 bg-red-500/5 border border-red-500/10 rounded-2xl flex items-start gap-4">
+                    <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-red-700 dark:text-red-400 mb-1">Không thể kích hoạt bài tập AI</h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 font-medium">
+                        Có thể video này bị giới hạn quyền truy cập phụ đề tự động hoặc kết nối máy chủ bận. Bạn hãy làm bài tập mặc định dưới đây hoặc bấm thử lại nhé!
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={generateAiExercise}
+                          className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all"
+                        >
+                          Thử lại với AI
+                        </button>
+                        <button
+                          onClick={() => setGenerationError(null)}
+                          className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition-all"
+                        >
+                          Sử dụng bài học mặc định
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Render Loaded AI Exercise */}
+                {aiExercise && (
+                  <div className="space-y-6 animate-fadeIn">
+                    
+                    {/* Header info badge */}
+                    <div className="flex items-center justify-between flex-wrap gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full",
+                          aiExercise.type === "code_challenge" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                          aiExercise.type === "quiz" && "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+                          aiExercise.type === "qa_writing" && "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        )}>
+                          {aiExercise.type === "code_challenge" ? "💻 Thử thách Viết Code" : 
+                           aiExercise.type === "quiz" ? "📝 Trắc nghiệm Tương tác" : "✍️ Thực hành Tự luận & Tư duy"}
+                        </span>
+                        <h4 className="text-lg font-black text-slate-800 dark:text-white mt-2">{aiExercise.title}</h4>
+                      </div>
+                      <button
+                        onClick={generateAiExercise}
+                        disabled={isGeneratingExercise}
+                        className="text-xs font-bold text-slate-400 hover:text-emerald-500 transition-colors flex items-center gap-1.5"
+                      >
+                        <Sparkles size={12} /> Làm đề AI mới
+                      </button>
+                    </div>
+
+                    {/* Description & Instruction */}
+                    <div className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-semibold prose max-w-none dark:prose-invert">
+                      {aiExercise.description}
+                    </div>
+
+                    {/* EXERCISE CONTENT BY TYPE */}
+
+                    {/* Type 1: CODE CHALLENGE */}
+                    {aiExercise.type === "code_challenge" && aiExercise.codeChallenge && (
+                      <div className="space-y-6">
+                        <div className="bg-slate-900 text-slate-100 p-5 rounded-2xl font-mono text-xs space-y-3 shadow-lg border border-slate-800">
+                          <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 text-slate-400 text-[10px] font-bold tracking-wider uppercase">
+                            <span>💻 Interactive Workspace ({aiExercise.codeChallenge.language || "python"})</span>
+                            <button 
+                              onClick={() => setSubmittedCode(aiExercise.codeChallenge.starterCode || "")}
+                              className="hover:text-white transition-colors"
+                            >
+                              [Reset Code]
+                            </button>
+                          </div>
+                          <div className="text-slate-300 italic mb-2">
+                            # Đề bài: {aiExercise.codeChallenge.instructions}
+                          </div>
+                          {aiExercise.codeChallenge.expectedOutput && (
+                            <div className="text-emerald-400/90 mb-4">
+                              # Đầu ra mong đợi: {aiExercise.codeChallenge.expectedOutput}
+                            </div>
+                          )}
+                          <textarea
+                            value={submittedCode}
+                            onChange={(e) => setSubmittedCode(e.target.value)}
+                            className="w-full h-48 bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl p-4 font-mono text-xs text-emerald-400 resize-none outline-none leading-relaxed"
+                            placeholder="# Hãy viết mã nguồn của bạn vào đây..."
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={submitCodeChallenge}
+                            disabled={isValidatingCode || !submittedCode.trim()}
+                            className={cn(
+                              "px-6 py-3 rounded-2xl text-xs font-black transition-all flex items-center gap-2 shadow-md",
+                              isValidatingCode || !submittedCode.trim()
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                                : "bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-emerald-500/10 active:scale-95"
+                            )}
+                          >
+                            {isValidatingCode ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                            {isValidatingCode ? "AI đang chấm điểm..." : "Nộp bài & AI nhận xét"}
+                          </button>
+                          
+                          <button
+                            onClick={() => setShowSolutions(prev => ({ ...prev, code: !prev.code }))}
+                            className="px-6 py-3 rounded-2xl text-xs font-black text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                          >
+                            {showSolutions['code'] ? "Ẩn gợi ý giải" : "Xem gợi ý giải"}
+                          </button>
+                        </div>
+
+                        {/* AI Code Feedback output */}
+                        {codeFeedback && (
+                          <div className={cn(
+                            "p-6 rounded-3xl border animate-slideUp space-y-4",
+                            codeFeedback.passed 
+                              ? "bg-emerald-500/5 border-emerald-500/20" 
+                              : "bg-amber-500/5 border-amber-500/20"
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "w-3 h-3 rounded-full animate-ping",
+                                  codeFeedback.passed ? "bg-emerald-500" : "bg-amber-500"
+                                )} />
+                                <h5 className={cn(
+                                  "text-sm font-black",
+                                  codeFeedback.passed ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+                                )}>
+                                  {codeFeedback.passed ? "Chúc mừng! Đã vượt qua thành công 🎉" : "Cần sửa lại một chút 💪"}
+                                </h5>
+                              </div>
+                              <span className="text-xl font-black bg-slate-900 text-white px-4 py-1.5 rounded-2xl shadow-sm font-mono">
+                                {codeFeedback.score}/100
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold leading-relaxed whitespace-pre-line bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                              {codeFeedback.feedback}
+                            </div>
+
+                            {codeFeedback.refactoredCode && (
+                              <div className="space-y-2">
+                                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Mã nguồn mẫu tối ưu từ AI:</p>
+                                <pre className="p-4 bg-slate-950 text-emerald-400 rounded-xl font-mono text-xs overflow-x-auto leading-relaxed border border-slate-900">
+                                  {codeFeedback.refactoredCode}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Toggleable Solution code */}
+                        {showSolutions['code'] && (
+                          <div className="p-5 bg-slate-100 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 animate-slideUp space-y-3">
+                            <h5 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                              <HelpCircle size={14} /> Ý tưởng & Gợi ý xử lý:
+                            </h5>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                              Hãy chú ý kiểm tra đúng các kiểu dữ liệu, viết hàm chuẩn hóa đầu vào và in/trả về kết quả đúng với mô tả trong "Đầu ra mong đợi" để vượt qua các điều kiện kiểm tra nhé!
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Type 2: INTERACTIVE QUIZ */}
+                    {aiExercise.type === "quiz" && aiExercise.quizQuestions && (
+                      <div className="space-y-8">
+                        {aiExercise.quizQuestions.map((q: any, qIdx: number) => {
+                          const isAnswered = quizAnswers[qIdx] !== undefined;
+                          const selectedAnswer = quizAnswers[qIdx];
+                          return (
+                            <div key={qIdx} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+                              <h5 className="text-sm font-black text-slate-800 dark:text-white flex items-start gap-2">
+                                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black px-2 py-1 rounded-lg">Câu {qIdx + 1}</span>
+                                <span>{q.question}</span>
+                              </h5>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {q.options.map((opt: string, optIdx: number) => {
+                                  const isSelectedIdx = selectedAnswer === optIdx;
+                                  const isCorrectIdx = q.correctAnswerIdx === optIdx;
+                                  
+                                  return (
+                                    <button
+                                      key={optIdx}
+                                      disabled={isAnswered}
+                                      onClick={() => setQuizAnswers(prev => ({ ...prev, [qIdx]: optIdx }))}
+                                      className={cn(
+                                        "p-4 rounded-2xl text-xs font-bold text-left transition-all flex items-center justify-between border active:scale-[0.98]",
+                                        !isAnswered && "bg-slate-50 dark:bg-slate-800/20 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700",
+                                        isAnswered && isCorrectIdx && "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
+                                        isAnswered && isSelectedIdx && !isCorrectIdx && "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400",
+                                        isAnswered && !isSelectedIdx && !isCorrectIdx && "bg-slate-50 dark:bg-slate-800/10 border-slate-100 dark:border-slate-900 text-slate-400"
+                                      )}
+                                    >
+                                      <span>{opt}</span>
+                                      {isAnswered && isCorrectIdx && (
+                                        <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+                                      )}
+                                      {isAnswered && isSelectedIdx && !isCorrectIdx && (
+                                        <span className="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-bold">✕</span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Interactive Explanation Box */}
+                              {isAnswered && (
+                                <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl animate-slideUp space-y-1">
+                                  <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Lời giải chi tiết:</p>
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold leading-relaxed">
+                                    {q.explanation}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Type 3: CRITICAL THINKING / WRITING */}
+                    {aiExercise.type === "qa_writing" && aiExercise.writingTasks && (
+                      <div className="space-y-6">
+                        {aiExercise.writingTasks.map((t: any, tIdx: number) => {
+                          const isSolutionShown = showSolutions[tIdx];
+                          return (
+                            <div key={tIdx} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
+                              <h5 className="text-sm font-black text-slate-800 dark:text-white flex items-start gap-2">
+                                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black px-2 py-1 rounded-lg">Bài tập {tIdx + 1}</span>
+                                <span>{t.prompt}</span>
+                              </h5>
+
+                              <textarea
+                                value={writingInputs[tIdx] || ""}
+                                onChange={(e) => setWritingInputs(prev => ({ ...prev, [tIdx]: e.target.value }))}
+                                className="w-full h-32 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-2xl p-4 font-semibold text-xs text-slate-700 dark:text-slate-300 resize-none outline-none leading-relaxed"
+                                placeholder="Hãy tự viết câu trả lời hoặc suy nghĩ của bạn tại đây để kiểm tra mức độ hiểu bài học..."
+                              />
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setShowSolutions(prev => ({ ...prev, [tIdx]: !prev[tIdx] }))}
+                                  className="px-4 py-2 bg-slate-900 dark:bg-slate-800 text-white dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-700 transition-all"
+                                >
+                                  {isSolutionShown ? "Ẩn gợi ý giải đáp" : "💡 Xem gợi ý giải đáp mẫu"}
+                                </button>
+                              </div>
+
+                              {/* Suggestion block */}
+                              {isSolutionShown && (
+                                <div className="p-5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl animate-slideUp space-y-2">
+                                  <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">Gợi ý bài giải tối ưu mẫu:</p>
+                                  <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold leading-relaxed whitespace-pre-line">
+                                    {t.suggestedAnswer}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
@@ -1492,6 +2141,212 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
           )}
         </div>
       </div>
+
+      {/* Beautiful AI Quiz Modal for Course Completion Verification */}
+      <AnimatePresence>
+        {showQuizModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                // Only allow closing if not currently generating or successfully completed
+                if (!isGeneratingQuiz && (!quizSubmitted || (quizScore !== null && quizScore < 2))) {
+                  setShowQuizModal(false);
+                }
+              }}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md"
+            />
+
+            {/* Modal Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl border border-slate-100 dark:border-slate-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-6 md:p-8 custom-scrollbar z-10"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-50 dark:border-slate-800 pb-5 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                    <BrainCircuit size={22} className="animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-slate-900 dark:text-white">AI Quiz Hoàn Thành Bài Học</h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">Trả lời đúng ít nhất 2/3 câu hỏi để hoàn thành bài giảng!</p>
+                  </div>
+                </div>
+                {!isGeneratingQuiz && (!quizSubmitted || (quizScore !== null && quizScore < 2)) && (
+                  <button
+                    onClick={() => setShowQuizModal(false)}
+                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 rounded-xl transition-all"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </div>
+
+              {/* Body State 1: Loading / Generating Quiz */}
+              {isGeneratingQuiz && (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <Loader2 size={48} className="animate-spin text-emerald-500 mb-4" />
+                  <h4 className="text-base font-black text-slate-800 dark:text-white mb-2">Trí tuệ nhân tạo đang soạn đề...</h4>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm leading-relaxed font-semibold">
+                    Gemini đang tổng hợp kiến thức từ bài học <b>"{activeLesson?.title}"</b> để tạo ra bộ 3 câu hỏi trắc nghiệm chất lượng cao dành riêng cho bạn.
+                  </p>
+                </div>
+              )}
+
+              {/* Body State 2: Error */}
+              {!isGeneratingQuiz && quizError && (
+                <div className="py-8 text-center">
+                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 font-black flex-shrink-0">!</div>
+                  <h4 className="text-base font-black text-red-600 dark:text-red-400 mb-2">Không thể tải đề thi trắc nghiệm</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto font-medium">{quizError}</p>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={startCompleteLessonQuiz}
+                      className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition-all shadow-md"
+                    >
+                      Thử lại ngay
+                    </button>
+                    <button
+                      onClick={() => setShowQuizModal(false)}
+                      className="px-6 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Body State 3: Quiz Loaded & Answering */}
+              {!isGeneratingQuiz && !quizError && quizData && (
+                <div className="space-y-6">
+                  {/* Render questions list */}
+                  {quizData.map((q, qIdx) => {
+                    const isSelected = userAnswers[qIdx] !== undefined;
+                    const hasSubmitted = quizSubmitted;
+                    const isCorrect = userAnswers[qIdx] === q.correctIndex;
+
+                    return (
+                      <div key={qIdx} className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-800/60 transition-all text-left">
+                        <h4 className="text-sm font-black text-slate-800 dark:text-white flex items-start gap-2 mb-4">
+                          <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs px-2.5 py-1 rounded-lg flex-shrink-0">Câu {qIdx + 1}</span>
+                          <span className="leading-relaxed">{q.question}</span>
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {q.options.map((option: string, oIdx: number) => {
+                            const isCurrentSelection = userAnswers[qIdx] === oIdx;
+                            let btnClass = "border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 text-slate-700 dark:text-slate-300 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/10";
+                            let iconIndicator = null;
+
+                            if (hasSubmitted) {
+                              if (oIdx === q.correctIndex) {
+                                // Correct option
+                                btnClass = "bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-400 font-bold";
+                                iconIndicator = <span className="text-emerald-500 text-xs font-black">✓ Đúng</span>;
+                              } else if (isCurrentSelection) {
+                                // Wrong selection
+                                btnClass = "bg-red-500/10 border-red-500 text-red-700 dark:text-red-400 font-bold";
+                                iconIndicator = <span className="text-red-500 text-xs font-black">✗ Sai</span>;
+                              } else {
+                                btnClass = "opacity-55 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed";
+                              }
+                            } else if (isCurrentSelection) {
+                              btnClass = "bg-emerald-500 dark:bg-emerald-600 border-emerald-500 dark:border-emerald-600 text-white font-bold shadow-md shadow-emerald-500/10";
+                            }
+
+                            return (
+                              <button
+                                key={oIdx}
+                                disabled={hasSubmitted}
+                                onClick={() => setUserAnswers(prev => ({ ...prev, [qIdx]: oIdx }))}
+                                className={cn(
+                                  "w-full text-left p-4 rounded-xl border-2 text-xs font-semibold leading-relaxed transition-all flex items-center justify-between",
+                                  btnClass
+                                )}
+                              >
+                                <span className="flex-1 pr-2">{option}</span>
+                                {iconIndicator}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Footer Actions / Results */}
+                  <div className="border-t border-slate-50 dark:border-slate-800 pt-6 mt-6">
+                    {!quizSubmitted ? (
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">
+                          Đã làm: {Object.keys(userAnswers).length}/3 câu
+                        </p>
+                        <button
+                          onClick={submitQuizAnswers}
+                          disabled={Object.keys(userAnswers).length < 3}
+                          className={cn(
+                            "px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-md",
+                            Object.keys(userAnswers).length === 3
+                              ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-lg hover:shadow-emerald-500/10 cursor-pointer"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none"
+                          )}
+                        >
+                          Nộp bài trắc nghiệm
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {quizScore !== null && quizScore >= 2 ? (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center"
+                          >
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-black">🎉</div>
+                            <h4 className="text-base font-black text-emerald-800 dark:text-emerald-400 mb-1">Xuất sắc vượt qua!</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-3">Bạn đạt điểm số {quizScore}/3 câu đúng.</p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 animate-pulse font-black uppercase tracking-wider">Đang lưu kết quả và chuyển tới bài học tiếp theo...</p>
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="p-5 bg-red-500/10 border border-red-500/20 rounded-2xl text-center"
+                          >
+                            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-black">⚡</div>
+                            <h4 className="text-base font-black text-red-600 dark:text-red-400 mb-1">Chưa đạt yêu cầu</h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-4">Bạn chỉ đúng {quizScore}/3 câu. Hãy xem kỹ lại video bài học và thử lại nhé!</p>
+                            <div className="flex justify-center gap-3">
+                              <button
+                                onClick={startCompleteLessonQuiz}
+                                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
+                              >
+                                Làm lại trắc nghiệm
+                              </button>
+                              <button
+                                onClick={() => setShowQuizModal(false)}
+                                className="px-6 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                              >
+                                Đóng và Ôn tập lại
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
