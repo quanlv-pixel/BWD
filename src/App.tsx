@@ -916,6 +916,20 @@ const HomePage = () => {
 
 const ResourcesPage = () => {
   const [activeCategory, setActiveCategory] = useState("Tất cả");
+  // DocViewerModal state
+  const [docViewerUrl, setDocViewerUrl] = useState<string | null>(null);
+  const [docViewerTitle, setDocViewerTitle] = useState<string>("");
+
+  const openDoc = (url: string, title: string) => {
+    // Only embed if it's a direct linkable resource; Google search links open normally
+    if (url.startsWith("http") && !url.includes("google.com/search") && url !== "#") {
+      setDocViewerUrl(url);
+      setDocViewerTitle(title);
+    } else {
+      // For search links or placeholder links, open externally
+      if (url !== "#") window.open(url, "_blank", "noreferrer");
+    }
+  };
 
   const sidebarItems = [
     { name: "Tất cả", icon: <Library size={18} /> },
@@ -1074,14 +1088,16 @@ const ResourcesPage = () => {
 
           <div className="grid sm:grid-cols-2 xl:grid-cols-2 gap-8">
             {filteredResources.map((res, i) => (
-              <motion.a
+              <motion.div
                 key={i}
-                href={res.link}
-                target="_blank"
+                role="button"
+                tabIndex={0}
+                onClick={() => openDoc(res.link, res.title)}
+                onKeyDown={e => e.key === "Enter" && openDoc(res.link, res.title)}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="group relative bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl hover:border-emerald-600 dark:hover:border-emerald-500 transition-all flex flex-col min-h-[280px]"
+                className="group relative bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-2xl hover:border-emerald-600 dark:hover:border-emerald-500 transition-all flex flex-col min-h-[280px] cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex flex-col">
@@ -1112,9 +1128,9 @@ const ResourcesPage = () => {
                   <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-2 uppercase tracking-widest">
                     Đọc tài liệu <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                   </span>
-                  <ExternalLink size={16} className="text-slate-300 dark:text-slate-600" />
+                  <Book size={16} className="text-slate-300 dark:text-slate-600" />
                 </div>
-              </motion.a>
+              </motion.div>
             ))}
           </div>
 
@@ -1126,6 +1142,55 @@ const ResourcesPage = () => {
           )}
         </div>
       </main>
+
+      {/* ── DocViewerModal ── In-app iframe document viewer */}
+      <AnimatePresence>
+        {docViewerUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-stretch bg-slate-900/95 backdrop-blur-md"
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-900 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 bg-emerald-500/10 rounded-xl shrink-0">
+                  <Book size={18} className="text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-0.5">Tài liệu số</p>
+                  <h3 className="text-sm font-black text-white truncate">{docViewerTitle}</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-4">
+                <a
+                  href={docViewerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-all"
+                >
+                  <ExternalLink size={13} /> Mở tab mới
+                </a>
+                <button
+                  onClick={() => { setDocViewerUrl(null); setDocViewerTitle(""); }}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+                  aria-label="Đóng"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            {/* iframe */}
+            <iframe
+              src={docViewerUrl}
+              className="flex-1 w-full border-0 bg-white"
+              title={docViewerTitle}
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1162,7 +1227,13 @@ const SkillsPage = ({ searchQuery, setSearchQuery }: { searchQuery: string, setS
     fetch(`/api/courses?q=${encodeURIComponent(finalQuery)}`)
       .then(r => r.json())
       .then(data => {
-        setCourses(Array.isArray(data) ? data : []);
+        // API now returns { primary, alternativeVideos, items }
+        const courseList = Array.isArray(data)
+          ? data
+          : Array.isArray(data.items)
+          ? data.items
+          : [];
+        setCourses(courseList);
         setIsLoading(false);
       })
       .catch(err => {
@@ -1439,7 +1510,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
     }
   };
 
-  // Helper: Submit complete lesson quiz answers
+  // Helper: Submit complete lesson quiz answers (10 questions, 8/10 to pass)
   const submitQuizAnswers = () => {
     if (!quizData) return;
 
@@ -1453,8 +1524,8 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
     setQuizScore(correctCount);
     setQuizSubmitted(true);
 
-    if (correctCount >= 2) {
-      // Passed (>= 2/3 correct)
+    if (correctCount >= 8) {
+      // Passed (>= 8/10 correct)
       setTimeout(async () => {
         const activeLesson = course?.lessons[activeLessonIdx];
         if (activeLesson) {
@@ -1496,22 +1567,33 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
     fetch(`/api/courses?q=${encodeURIComponent(searchQuery)}`)
       .then(r => r.json())
       .then(data => {
-        const uniqueVideos: any[] = [];
-        data.forEach((c: any) => {
-          if (c.lessons) {
-            c.lessons.forEach((l: any) => {
-              if (l.videoId && l.videoId !== activeLesson.videoId && !uniqueVideos.some(v => v.videoId === l.videoId)) {
-                uniqueVideos.push({
-                  videoId: l.videoId,
-                  title: l.title || c.title,
-                  author: c.author || "YouTube Creator",
-                  thumbnail: c.thumbnail
-                });
-              }
-            });
-          }
-        });
-        setAlternativeVideos(uniqueVideos.slice(0, 4));
+        // API now returns { primary, alternativeVideos, items }
+        const primaryVideo: any | null = data.primary ?? null;
+        const altList: any[] = Array.isArray(data.alternativeVideos)
+          ? data.alternativeVideos
+          : [];
+
+        // Set the first (primary) video from the API as the active video
+        if (primaryVideo?.videoId) {
+          setCustomVideoId(primaryVideo.videoId);
+        }
+
+        // Build alternative videos list from the API's alternativeVideos,
+        // ensuring the primary video is not duplicated in the list
+        const primaryId = primaryVideo?.videoId ?? null;
+        const uniqueAlts = altList
+          .filter(v => v.videoId && v.videoId !== primaryId)
+          .map(v => ({
+            videoId: v.videoId,
+            title: v.title || "Video liên quan",
+            author: v.author || "YouTube Creator",
+            thumbnail: v.thumbnail || ""
+          }))
+          // Also exclude the lesson's own videoId to avoid duplicates
+          .filter(v => v.videoId !== activeLesson.videoId)
+          .slice(0, 8);
+
+        setAlternativeVideos(uniqueAlts);
         setIsSearchingAlts(false);
       })
       .catch(err => {
@@ -1524,11 +1606,18 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
     fetch(`/api/courses`)
       .then(r => r.json())
       .then(data => {
-        const found = data.find((c: any) => c.id === id);
-        setCourse(found);
+        // API now returns { primary, alternativeVideos, items }
+        const courseList = Array.isArray(data)
+          ? data
+          : Array.isArray(data.items)
+          ? data.items
+          : [];
+        const found = courseList.find((c: any) => c.id === id);
+        setCourse(found ?? null);
         setIsLoading(false);
-      });
-    
+      })
+      .catch(() => setIsLoading(false));
+
     if (user && id) {
       const progressRef = doc(db, "userProgress", `${user.uid}_${id}`);
       getDoc(progressRef).then(snapshot => {
@@ -1820,9 +1909,10 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                     <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={20} />
                     <div className="flex-1">
                       <h4 className="text-sm font-black text-red-700 dark:text-red-400 mb-1">Không thể kích hoạt bài tập AI</h4>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 font-medium">
-                        Có thể video này bị giới hạn quyền truy cập phụ đề tự động hoặc kết nối máy chủ bận. Bạn hãy làm bài tập mặc định dưới đây hoặc bấm thử lại nhé!
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mb-1 font-medium">
+                        AI hiện đang quá tải hoặc video bị giới hạn phụ đề. Bạn có thể thử lại hoặc dùng bài tập mặc định!
                       </p>
+                      <p className="text-[11px] text-red-500/70 font-mono mb-4 break-all">{generationError}</p>
                       <div className="flex items-center gap-3">
                         <button
                           onClick={generateAiExercise}
@@ -2175,7 +2265,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                   </div>
                   <div>
                     <h3 className="font-black text-lg text-slate-900 dark:text-white">AI Quiz Hoàn Thành Bài Học</h3>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">Trả lời đúng ít nhất 2/3 câu hỏi để hoàn thành bài giảng!</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">Trả lời đúng ít nhất 8/10 câu hỏi để hoàn thành bài giảng và nhận huy chương!</p>
                   </div>
                 </div>
                 {!isGeneratingQuiz && (!quizSubmitted || (quizScore !== null && quizScore < 2)) && (
@@ -2283,16 +2373,16 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                   {/* Footer Actions / Results */}
                   <div className="border-t border-slate-50 dark:border-slate-800 pt-6 mt-6">
                     {!quizSubmitted ? (
-                      <div className="flex items-center justify-between gap-4">
+                       <div className="flex items-center justify-between gap-4">
                         <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">
-                          Đã làm: {Object.keys(userAnswers).length}/3 câu
+                          Đã làm: {Object.keys(userAnswers).length}/{quizData.length} câu
                         </p>
                         <button
                           onClick={submitQuizAnswers}
-                          disabled={Object.keys(userAnswers).length < 3}
+                          disabled={Object.keys(userAnswers).length < quizData.length}
                           className={cn(
                             "px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-md",
-                            Object.keys(userAnswers).length === 3
+                            Object.keys(userAnswers).length === quizData.length
                               ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-lg hover:shadow-emerald-500/10 cursor-pointer"
                               : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none"
                           )}
@@ -2302,7 +2392,7 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {quizScore !== null && quizScore >= 2 ? (
+                        {quizScore !== null && quizScore >= 8 ? (
                           <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -2310,7 +2400,9 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                           >
                             <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-black">🎉</div>
                             <h4 className="text-base font-black text-emerald-800 dark:text-emerald-400 mb-1">Xuất sắc vượt qua!</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-3">Bạn đạt điểm số {quizScore}/3 câu đúng.</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-1">
+                              Bạn đạt điểm số <span className="text-emerald-600 font-black">{quizScore}/10</span> câu đúng — Xuất sắc!
+                            </p>
                             <p className="text-xs text-emerald-600 dark:text-emerald-400 animate-pulse font-black uppercase tracking-wider">Đang lưu kết quả và chuyển tới bài học tiếp theo...</p>
                           </motion.div>
                         ) : (
@@ -2321,7 +2413,10 @@ const CourseDetailPage = ({ user }: { user: FirebaseUser | null }) => {
                           >
                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-3 text-xl font-black">⚡</div>
                             <h4 className="text-base font-black text-red-600 dark:text-red-400 mb-1">Chưa đạt yêu cầu</h4>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-4">Bạn chỉ đúng {quizScore}/3 câu. Hãy xem kỹ lại video bài học và thử lại nhé!</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mb-1">
+                              Bạn đạt <span className="text-red-500 font-black">{quizScore}/10</span>. Cần tối thiểu <span className="font-black text-amber-500">8/10</span> để nhận huy chương.
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 font-bold mb-4">Hãy xem kỹ lại video bài học và thử lại nhé!</p>
                             <div className="flex justify-center gap-3">
                               <button
                                 onClick={startCompleteLessonQuiz}
@@ -2355,79 +2450,116 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
   const [redemptions, setRedemptions] = useState<any[]>([]);
   const [totalMedals, setTotalMedals] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [successReward, setSuccessReward] = useState<any | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   const navigate = useNavigate();
 
+  // 1 medal = 100 points
+  const POINTS_PER_MEDAL = 100;
+
   const rewards = [
-    { title: "Gói Premium 1 Tháng", cost: 3, icon: <Zap className="text-emerald-500" />, desc: "Mở khóa toàn bộ tài liệu chuyên sâu và bài giải mẫu." },
-    { title: "Giảm giá 50% Khóa Offline", cost: 5, icon: <Gift className="text-blue-500" />, desc: "Áp dụng cho các khóa học thực tế tại trung tâm đối tác." },
-    { title: "Bộ Stickers Hub", cost: 2, icon: <Star className="text-amber-500" />, desc: "Bộ sticker độc quyền cực cool dán laptop." },
-    { title: "Thẻ Quà Tặng Starbucks", cost: 10, icon: <Heart className="text-red-500" />, desc: "Phần thưởng cho những nỗ lực học tập không mệt mỏi." }
+    {
+      id: "shopee_50",
+      title: "Shopee Voucher 50k",
+      cost: 500,
+      icon: "🛍️",
+      gradient: "from-orange-400 to-red-500",
+      desc: "Mã giảm giá 50.000₫ áp dụng cho mọi đơn hàng trên Shopee.",
+      tag: "Phổ biến"
+    },
+    {
+      id: "book_cleancode",
+      title: "Sách Clean Code",
+      cost: 1500,
+      icon: "📚",
+      gradient: "from-blue-500 to-indigo-600",
+      desc: "Cuốn sách ‘gối đầu giường’ của mọi lập trình viên về viết mã sạch.",
+      tag: "Giá trị cao"
+    },
+    {
+      id: "mentor_session",
+      title: "Mentor 1-on-1 (60 phút)",
+      cost: 3000,
+      icon: "🧑‍🏫",
+      gradient: "from-emerald-500 to-teal-600",
+      desc: "Buổi tư vấn 1-1 với chuyên gia giàu kinh nghiệm trong lĩnh vực bạn chọn.",
+      tag: "Premium"
+    },
+    {
+      id: "premium_1m",
+      title: "Gói Premium 1 Tháng",
+      cost: 800,
+      icon: "⚡",
+      gradient: "from-amber-400 to-yellow-500",
+      desc: "Mở khóa toàn bộ tài liệu chuyên sâu, bài giải mẫu và chứng chỉ trong 30 ngày.",
+      tag: "Hật cơ"
+    },
+    {
+      id: "gongcha_voucher",
+      title: "Gongcha Voucher 100k",
+      cost: 1000,
+      icon: "🧃",
+      gradient: "from-pink-400 to-rose-500",
+      desc: "Phần thưởng ngọt ngào sau những buổi học chăm chỉ!",
+      tag: "Hot 🔥"
+    },
+    {
+      id: "sticker_pack",
+      title: "Bộ Stickers SSH",
+      cost: 200,
+      icon: "🎨",
+      gradient: "from-violet-400 to-purple-600",
+      desc: "Bộ sticker độc quyền cực cool dán laptop, thể hiện phong cách lập trình viên.",
+      tag: "Mới"
+    }
   ];
 
   useEffect(() => {
     if (!user) return;
 
-    // Fetch Medals
     const medalsQ = query(collection(db, "medals"), where("userId", "==", user.uid));
     const unsubMedals = onSnapshot(medalsQ, (snap) => {
-      setTotalMedals(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, "medals");
-    });
+      setTotalMedals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, "medals"));
 
-    // Fetch Redemptions
-    const redemptionsQ = query(collection(db, "redemptions"), where("userId", "==", user.uid));
+    const redemptionsQ = query(collection(db, "redemptions"), where("userId", "==", user.uid), orderBy("redeemedAt", "desc"));
     const unsubRedemptions = onSnapshot(redemptionsQ, (snap) => {
-      setRedemptions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, "redemptions");
-    });
+      setRedemptions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, "redemptions"));
 
-    return () => {
-      unsubMedals();
-      unsubRedemptions();
-    };
+    return () => { unsubMedals(); unsubRedemptions(); };
   }, [user]);
 
-  const totalEarnedMedals = totalMedals.length;
-  const totalUsedMedals = redemptions.reduce((acc, curr) => acc + (curr.cost || 0), 0);
-  const availableMedals = totalEarnedMedals - totalUsedMedals;
+  const totalEarnedPoints = totalMedals.length * POINTS_PER_MEDAL;
+  const totalSpentPoints = redemptions.reduce((acc, curr) => acc + (curr.costPoints || 0), 0);
+  const availablePoints = totalEarnedPoints - totalSpentPoints;
 
   const handleRedeem = async (rw: typeof rewards[0]) => {
-    if (!user) {
-      alert("Vui lòng đăng nhập để đổi quà!");
+    if (!user) { alert("Vui lòng đăng nhập để đổi quà!"); return; }
+    if (availablePoints < rw.cost) {
+      setErrorMsg(`Bạn cần thêm ${rw.cost - availablePoints} điểm để đổi “${rw.title}”.`);
+      setTimeout(() => setErrorMsg(""), 4000);
       return;
     }
-
-    if (availableMedals < rw.cost) {
-      setErrorMsg(`Bạn không đủ huy chương để đổi "${rw.title}". Bạn cần thêm ${rw.cost - availableMedals} huy chương nữa!`);
-      setSuccessMsg("");
-      return;
-    }
-
     setIsProcessing(true);
     setErrorMsg("");
-    setSuccessMsg("");
-
     try {
-      // Create random gift code
-      const randHex = Math.random().toString(16).substring(2, 8).toUpperCase();
-      const code = `SSH-${rw.title.includes("Starbucks") ? "STAR" : rw.title.includes("Premium") ? "PREM" : "GIFT"}-${randHex}`;
-
-      const redemptionId = `red_${user.uid}_${Date.now()}`;
-      const redemptionRef = doc(db, "redemptions", redemptionId);
-
-      await setDoc(redemptionRef, {
+      const randHex = Math.random().toString(16).substring(2, 10).toUpperCase();
+      const code = `SSH-${rw.id.split("_")[0].toUpperCase()}-${randHex}`;
+      await addDoc(collection(db, "redemptions"), {
         userId: user.uid,
+        rewardId: rw.id,
         rewardTitle: rw.title,
-        cost: rw.cost,
+        costPoints: rw.cost,
         promoCode: code,
         redeemedAt: serverTimestamp()
       });
-
-      setSuccessMsg(`Chúc mừng! Bạn đã đổi thành công "${rw.title}". Mã ưu đãi của bạn: ${code}`);
+      // Update user points record
+      await setDoc(doc(db, "users", user.uid), {
+        totalSpentPoints: totalSpentPoints + rw.cost,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setSuccessReward({ ...rw, code });
     } catch (err: any) {
       console.error(err);
       setErrorMsg("Đã xảy ra lỗi trong quá trình đổi quà. Vui lòng thử lại!");
@@ -2442,7 +2574,7 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
         <div className="max-w-md mx-auto bg-white dark:bg-slate-900 p-10 rounded-[45px] shadow-3d-sm border border-slate-100 dark:border-slate-800">
           <Gift size={64} className="text-amber-500 mx-auto mb-6 animate-pulse" />
           <h2 className="text-2xl font-black mb-4">Vui lòng đăng nhập để đổi quà</h2>
-          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm font-medium">Bằng cách tích lũy huy chương qua từng khóa học, bạn sẽ có cơ hội đổi nhiều quà tặng hấp dẫn.</p>
+          <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm font-medium">Tích lũy điểm thưởng qua từng bài học, đổi quà hấp dẫn!</p>
           <Link to="/login" className="block w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black transition-all">Đăng nhập ngay</Link>
         </div>
       </div>
@@ -2450,83 +2582,135 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
   }
 
   return (
-    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto dark:bg-slate-950 transition-colors">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12 bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
-        <div>
-          <h1 className="text-4xl font-black mb-2 text-slate-900 dark:text-white">Cửa Hàng Đổi Quà</h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">Tích lũy huy chương từ việc hoàn thành khóa học để đổi quà giá trị.</p>
+    <div className="pt-28 pb-20 px-4 md:px-6 max-w-7xl mx-auto dark:bg-slate-950 transition-colors">
+
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 rounded-[40px] p-8 md:p-12 mb-10 text-white">
+        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, #10b981 0%, transparent 50%), radial-gradient(circle at 80% 20%, #f59e0b 0%, transparent 40%)' }} />
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-2">Cửa Hàng Phần Thưởng</p>
+            <h1 className="text-4xl md:text-5xl font-black mb-2 leading-tight">Reward Store</h1>
+            <p className="text-slate-300 font-medium text-sm max-w-md">Hoàn thành khóa học → nhận huy chương → quy đổi điểm → đổi quà xịt!</p>
+          </div>
+          <div className="flex gap-4 shrink-0">
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl px-6 py-5 text-center">
+              <p className="text-[10px] font-black uppercase tracking-wider text-amber-300 mb-1">Điểm hiện có</p>
+              <p className="text-4xl font-black text-amber-300 leading-none">{availablePoints.toLocaleString()}</p>
+              <p className="text-[10px] text-white/50 font-bold mt-1">pts</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl px-6 py-5 text-center">
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300 mb-1">Huy chương</p>
+              <p className="text-4xl font-black text-emerald-300 leading-none">{totalMedals.length}</p>
+              <p className="text-[10px] text-white/50 font-bold mt-1">{POINTS_PER_MEDAL} pts/hc</p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="px-6 py-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/35 rounded-3xl text-center">
-            <p className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Huy chương hiện có</p>
-            <p className="text-3xl font-black text-amber-700 dark:text-amber-300 flex items-center justify-center gap-2 mt-1">
-              <Award size={28} className="animate-bounce" /> {availableMedals} <span className="text-xs text-slate-400 font-bold">/ {totalEarnedMedals}</span>
-            </p>
+        {/* Progress bar */}
+        <div className="relative z-10 mt-8">
+          <div className="flex items-center justify-between text-xs font-bold text-white/60 mb-2">
+            <span>Tổng điểm tích lũy: {totalEarnedPoints.toLocaleString()} pts</span>
+            <span>Đã dùng: {totalSpentPoints.toLocaleString()} pts</span>
+          </div>
+          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 rounded-full transition-all duration-700"
+              style={{ width: totalEarnedPoints > 0 ? `${(availablePoints / totalEarnedPoints) * 100}%` : '0%' }}
+            />
           </div>
         </div>
       </div>
 
-      {errorMsg && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-5 mb-8 rounded-2xl bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 text-sm font-bold flex items-center gap-3 border border-red-100 dark:border-red-900/20">
-          <X size={18} /> {errorMsg}
-        </motion.div>
-      )}
+      {/* Earning guide */}
+      <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl p-5 mb-8 flex items-center gap-4">
+        <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/50 rounded-xl flex items-center justify-center shrink-0">
+          <Trophy className="text-emerald-600" size={20} />
+        </div>
+        <p className="text-sm text-emerald-800 dark:text-emerald-300 font-bold">
+          Cách kiếm điểm: Hoàn thành toàn bộ bài học trong một khóa học để nhận <span className="text-emerald-600 font-black">1 huy chương = 100 điểm</span>. Đạt điểm kỳ thi tối thiểu 8/10 để hoàn thành mỗi bài!
+        </p>
+      </div>
 
-      {successMsg && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-5 mb-8 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 text-sm font-bold flex items-center gap-3 border border-emerald-100 dark:border-emerald-900/20">
-          <CheckCircle size={18} /> {successMsg}
-        </motion.div>
-      )}
+      {/* Error message */}
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="p-4 mb-6 rounded-2xl bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 text-sm font-bold flex items-center gap-3 border border-red-100 dark:border-red-900/20"
+          >
+            <X size={18} /> {errorMsg}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-16">
-        {rewards.map((rw, i) => {
-          const isAffordable = availableMedals >= rw.cost;
+      {/* Rewards Grid */}
+      <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-6">Chọn quà của bạn</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+        {rewards.map((rw) => {
+          const isAffordable = availablePoints >= rw.cost;
           return (
-            <motion.div 
-              key={i}
-              whileHover={{ y: -5 }}
-              className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm flex flex-col items-center text-center group"
+            <motion.div
+              key={rw.id}
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="relative bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col"
             >
-              <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center mb-6 text-3xl shadow-inner group-hover:scale-110 transition-all">
-                {rw.icon}
+              {/* Gradient top bar */}
+              <div className={`h-2 bg-gradient-to-r ${rw.gradient}`} />
+              {rw.tag && (
+                <span className={`absolute top-5 right-5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-gradient-to-r ${rw.gradient} text-white shadow-sm`}>
+                  {rw.tag}
+                </span>
+              )}
+              <div className="p-7 flex flex-col flex-1">
+                <div className="text-5xl mb-4">{rw.icon}</div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">{rw.title}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6 flex-1">{rw.desc}</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-2xl font-black text-amber-500">{rw.cost.toLocaleString()}</span>
+                    <span className="text-xs font-bold text-slate-400">pts</span>
+                  </div>
+                  {!isAffordable && (
+                    <span className="text-[10px] font-bold text-red-400">
+                      Cần thêm {(rw.cost - availablePoints).toLocaleString()} pts
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleRedeem(rw)}
+                  disabled={isProcessing}
+                  className={cn(
+                    "w-full py-3.5 rounded-2xl font-black text-sm transition-all active:scale-95",
+                    isAffordable
+                      ? `bg-gradient-to-r ${rw.gradient} text-white shadow-md hover:shadow-lg hover:opacity-90 cursor-pointer`
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                  )}
+                >
+                  {isProcessing ? "Đang xử lý..." : isAffordable ? "Đổi quà ngay" : "Chưa đủ điểm"}
+                </button>
               </div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3">{rw.title}</h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mb-4">Giá: {rw.cost} Huy chương</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-8 flex-1">{rw.desc}</p>
-              <button 
-                onClick={() => handleRedeem(rw)}
-                disabled={isProcessing}
-                className={cn(
-                  "w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95",
-                  isAffordable 
-                    ? "bg-slate-900 dark:bg-emerald-600 text-white shadow-md hover:bg-emerald-500 hover:shadow-lg hover:scale-[1.02] cursor-pointer" 
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                )}
-              >
-                {isProcessing ? "Đang xử lý..." : isAffordable ? "Đổi Quà" : "Chưa đủ huy chương"}
-              </button>
             </motion.div>
           );
         })}
       </div>
 
+      {/* Redemption History */}
       <div className="bg-white dark:bg-slate-900 p-8 md:p-10 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-3d-sm">
         <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-          <Gift size={24} className="text-emerald-500 animate-pulse" /> Quà tặng đã đổi của bạn
+          <Gift size={24} className="text-emerald-500" /> Lịch sử đổi quà
         </h3>
         {redemptions.length > 0 ? (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {redemptions.map((red) => (
-              <div key={red.id} className="py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div key={red.id} className="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-lg font-black text-slate-900 dark:text-white">{red.rewardTitle}</h4>
+                  <h4 className="text-base font-black text-slate-900 dark:text-white">{red.rewardTitle}</h4>
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wide mt-1">
-                    Giá: {red.cost} Huy chương &bull; Đổi vào: {red.redeemedAt?.toDate ? red.redeemedAt.toDate().toLocaleString('vi-VN') : 'Vừa xong'}
+                    {red.costPoints?.toLocaleString()} pts &bull; {red.redeemedAt?.toDate ? red.redeemedAt.toDate().toLocaleString('vi-VN') : 'Vừa xong'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-sm font-black text-slate-700 dark:text-slate-350">
-                    {red.promoCode || "SSH-GIFT-DFE3"}
+                  <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-sm font-black text-slate-700 dark:text-slate-300">
+                    {red.promoCode}
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full">Sẵn sàng dùng</span>
                 </div>
@@ -2536,13 +2720,337 @@ const RewardsPage = ({ user }: { user: FirebaseUser | null }) => {
         ) : (
           <div className="text-center py-12 text-slate-400 dark:text-slate-500">
             <Gift size={48} className="mx-auto mb-4 opacity-30" />
-            <p className="font-bold text-sm">Bạn chưa đổi phần quà nào. Hãy tích cực hoàn thành khóa học để nhận huy chương nhé!</p>
+            <p className="font-bold text-sm">Bạn chưa đổi phần quà nào. Hãy tích cực hoàn thành khóa học để tích điểm nhé!</p>
           </div>
         )}
       </div>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {successReward && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={() => setSuccessReward(null)} />
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="relative bg-white dark:bg-slate-900 rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl border border-slate-100 dark:border-slate-800 z-10"
+            >
+              <div className="text-6xl mb-4">{successReward.icon}</div>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Đổi quà thành công! 🎉</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-6">
+                Bạn đã đổi thành công <span className="font-black text-slate-800 dark:text-white">{successReward.title}</span>
+              </p>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 mb-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Mã ưu đãi của bạn</p>
+                <p className="font-mono text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-wider">{successReward.code}</p>
+              </div>
+              <button
+                onClick={() => setSuccessReward(null)}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl transition-all"
+              >
+                Tuyệt vời!
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FlashcardsPage — 3D flip cards with AI generation + Firestore persistence
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Flashcard { id: string; front: string; back: string; }
+
+const FlipCard = ({ card, idx }: { card: Flashcard; idx: number }) => {
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: idx * 0.04 }}
+      className="cursor-pointer"
+      style={{ perspective: 1200 }}
+      onClick={() => setFlipped(f => !f)}
+    >
+      <motion.div
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.5, type: 'spring', stiffness: 100 }}
+        style={{ transformStyle: 'preserve-3d', position: 'relative', minHeight: 200 }}
+      >
+        {/* Front */}
+        <div
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+          className="absolute inset-0 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[28px] p-6 flex flex-col items-center justify-center shadow-md hover:shadow-xl transition-shadow"
+        >
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-3">Mặt trước • Nhấn để lật</span>
+          <p className="text-base font-black text-slate-800 dark:text-white text-center leading-relaxed">{card.front}</p>
+          <div className="mt-4 w-8 h-1 bg-emerald-400 rounded-full" />
+        </div>
+        {/* Back */}
+        <div
+          style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+          className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-[28px] p-6 flex flex-col items-center justify-center shadow-md"
+        >
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-200 mb-3">Mặt sau • Giải thích</span>
+          <p className="text-sm font-semibold text-white text-center leading-relaxed">{card.back}</p>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const FlashcardsPage = ({ user }: { user: FirebaseUser | null }) => {
+  const [cards, setCards] = useState<Flashcard[]>([]);
+  const [front, setFront] = useState("");
+  const [back, setBack] = useState("");
+  const [topic, setTopic] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'browse' | 'add' | 'ai'>('browse');
+
+  // Load saved flashcards from Firestore
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, "users", user.uid, "flashcards"),
+      orderBy("createdAt", "desc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setCards(snap.docs.map(d => ({ id: d.id, ...d.data() } as Flashcard)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${user?.uid}/flashcards`));
+    return () => unsub();
+  }, [user]);
+
+  const saveCard = async (newCard: Omit<Flashcard, 'id'>) => {
+    if (!user) return;
+    await addDoc(collection(db, "users", user.uid, "flashcards"), {
+      ...newCard,
+      createdAt: serverTimestamp()
+    });
+  };
+
+  const handleAddCard = async () => {
+    if (!front.trim() || !back.trim()) return;
+    setIsSaving(true);
+    try {
+      await saveCard({ front: front.trim(), back: back.trim() });
+      setFront(""); setBack("");
+    } finally { setIsSaving(false); }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    if (!user) return;
+    try {
+      const { deleteDoc } = await import("firebase/firestore");
+      await deleteDoc(doc(db, "users", user.uid, "flashcards", cardId));
+    } catch (err) {
+      console.error("Delete flashcard error:", err);
+    }
+  };
+
+  const handleGenerateAI = async () => {
+    if (!topic.trim()) return;
+    setIsGenerating(true);
+    setGenError("");
+    try {
+      const res = await fetch("/api/generate-flashcards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: topic.trim() })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Không thể tạo flashcards.");
+      }
+      const data: Array<{ front: string; back: string }> = await res.json();
+      if (!Array.isArray(data) || data.length === 0) throw new Error("AI trả về dữ liệu rỗng.");
+      // Save all generated cards to Firestore if user is logged in
+      if (user) {
+        await Promise.all(data.map(c => saveCard({ front: c.front, back: c.back })));
+      }
+      setTopic("");
+    } catch (err: any) {
+      setGenError(err.message || "Đã xảy ra lỗi.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const tabs: { key: 'browse' | 'add' | 'ai'; label: string; icon: React.ReactNode }[] = [
+    { key: 'browse', label: `Thẻ của tôi (${cards.length})`, icon: <BookOpen size={16} /> },
+    { key: 'add',    label: 'Tạo thẻ mới',               icon: <Plus size={16} /> },
+    { key: 'ai',     label: 'AI Tạo đồng loạt',          icon: <Sparkles size={16} /> },
+  ];
+
+  return (
+    <div className="pt-28 pb-20 px-4 md:px-6 max-w-7xl mx-auto dark:bg-slate-950 transition-colors">
+      {/* Header */}
+      <div className="mb-10">
+        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-2">Đọc lập hoà Ghi nhớ</p>
+        <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">Flashcards 🃏</h1>
+        <p className="text-slate-500 dark:text-slate-400 font-medium max-w-xl">
+          Hệ thống thẻ ghi nhớ thông minh — tự tạo hoặc để AI tạo cho bạn. Nhấp vào thẻ để lật và xem đáp án!
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-8 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-2xl w-fit">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all",
+              activeTab === t.key
+                ? "bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            )}
+          >
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Browse cards */}
+      {activeTab === 'browse' && (
+        <>
+          {cards.length === 0 ? (
+            <div className="text-center py-32 opacity-30">
+              <BrainCircuit size={80} className="mx-auto mb-6" />
+              <p className="text-xl font-black">Chưa có thẻ nào. Hãy tạo thẻ đầu tiên của bạn!</p>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {cards.map((card, idx) => (
+                <div key={card.id} className="relative group">
+                  <FlipCard card={card} idx={idx} />
+                  {user && (
+                    <button
+                      onClick={() => handleDeleteCard(card.id)}
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center shadow-md z-10"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Tab: Add card manually */}
+      {activeTab === 'add' && (
+        <div className="max-w-xl mx-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6">Tạo thẻ thủ công</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 ml-2 mb-1.5 block">Mặt trước (câu hỏi / khái niệm)</label>
+                <textarea
+                  value={front}
+                  onChange={e => setFront(e.target.value)}
+                  placeholder="VD: Arrow function là gì?"
+                  rows={3}
+                  className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 dark:text-white resize-none transition-all border border-transparent focus:border-emerald-200 dark:focus:border-emerald-800"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 ml-2 mb-1.5 block">Mặt sau (câu trả lời / giải thích)</label>
+                <textarea
+                  value={back}
+                  onChange={e => setBack(e.target.value)}
+                  placeholder="VD: Arrow function là cú pháp ngắn gọn hơn của function expression..."
+                  rows={4}
+                  className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 dark:text-white resize-none transition-all border border-transparent focus:border-emerald-200 dark:focus:border-emerald-800"
+                />
+              </div>
+              <button
+                onClick={handleAddCard}
+                disabled={!front.trim() || !back.trim() || isSaving}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md"
+              >
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+                {isSaving ? "Đang lưu..." : "Thêm thẻ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: AI Generate */}
+      {activeTab === 'ai' && (
+        <div className="max-w-xl mx-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 p-8 shadow-sm">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
+                <Sparkles className="text-emerald-500" size={20} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">AI Tạo đồng loạt</h2>
+                <p className="text-xs text-slate-400 font-bold">Nhập chủ đề — AI sẽ tạo 10 thẻ ghi nhớ ngay lập tức</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mb-4">
+              <input
+                type="text"
+                value={topic}
+                onChange={e => setTopic(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !isGenerating && handleGenerateAI()}
+                placeholder="VD: React Hooks, Python OOP, IELTS Vocabulary..."
+                className="flex-1 bg-slate-50 dark:bg-slate-800 rounded-2xl px-5 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 dark:text-white border border-transparent focus:border-emerald-200 dark:focus:border-emerald-800 transition-all"
+              />
+              <button
+                onClick={handleGenerateAI}
+                disabled={!topic.trim() || isGenerating}
+                className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center gap-2 whitespace-nowrap shadow-md"
+              >
+                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                {isGenerating ? "Đang tạo..." : "Tạo ngay"}
+              </button>
+            </div>
+            {genError && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-2xl text-sm text-red-600 dark:text-red-400 font-bold flex items-center gap-2">
+                <AlertCircle size={16} />{genError}
+              </div>
+            )}
+            {isGenerating && (
+              <div className="text-center py-10">
+                <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin mx-auto mb-4" />
+                <p className="text-sm font-black text-slate-600 dark:text-slate-400 animate-pulse">
+                  Gemini đang tạo 10 thẻ ghi nhớ về “{topic}”...
+                </p>
+              </div>
+            )}
+            {!isGenerating && !genError && (
+              <div className="mt-6 p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+                <p className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">💡 Gợi ý chủ đề</p>
+                <div className="flex flex-wrap gap-2">
+                  {['React Hooks', 'Python OOP', 'IELTS Vocabulary', 'SQL cơ bản', 'Machine Learning', 'Quản lý thời gian', 'CSS Flexbox', 'Git cơ bản'].map(s => (
+                    <button key={s} onClick={() => setTopic(s)}
+                      className="text-xs font-bold px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:border-emerald-400 hover:text-emerald-600 transition-all"
+                    >{s}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const ProfilePage = ({ user }: { user: FirebaseUser | null }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
